@@ -32,13 +32,12 @@ Out: signing or notarising the tool; installers beyond the dotnet tool; containe
 - Moving the data dir later strands existing stores, so it is settled before the first non-Linux user.
 
 ## Now
-Initializing: the plan is agreed with BR; nothing built yet.
+Spike: the first CI run on the GitHub mirror (github.com/roobie/kvx, public, created by BR) probes name resolution and systemd-creds per OS, and runs the unchanged suite on all three, to show what breaks where.
 
 ## Next
-- Spike, before committing to the design:
-  - does `<vault>.dev.localhost` resolve to loopback on stock Windows and macOS (.NET's Dns, and curl)?
-  - does MSAL Extensions' storage hold a key in the Keychain without a prompt per kvx upgrade, and fail clearly when the Keychain is locked (SSH)?
-- Set up the mirror and a CI workflow (needs BR: a GitHub repo and a push mirror on gitea, or `gh auth login`).
+- Read the spike run; turn each failure into scope.
+- Spike the Keychain: does MSAL Extensions' storage hold a key without a prompt per kvx upgrade, and fail clearly when the Keychain is locked (SSH)?
+- A push mirror from gitea to GitHub (BR), until then pushed by hand with `GH_REPO_TOKEN_KVX`.
 - Protectors, then per-OS paths and token, then `doctor` and README.
 
 ## Evidence
