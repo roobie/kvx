@@ -29,13 +29,14 @@ Out (for now): the keys and certificates APIs; multi-user or networked deploymen
 - Same-user scope means the service runs per user, on loopback.
 
 ## Now
-Initializing: design questions settled (DESIGN.md "Settled"); ready to enter execute.
+Walking skeleton delivered: the stock SDK set/get works end to end on Linux through Caddy, with the sealed store and systemd-creds. Choosing the next milestone.
 
 ## Next
-- Cut the first milestone: a walking skeleton where SecretClient set/get round-trips through the sealed store on Linux, behind Caddy at `https://<vault>.kvx.localhost`.
+- Candidate next milestone: the rest of the secrets API (list with paging, versions, update, delete/recover/purge, backup/restore) as a conformance suite.
+- Candidates after that: DefaultAzureCredential support, the Windows/macOS key protectors, `kvx doctor`, dotnet tool packaging.
 
 ## Evidence
-<!-- Proof against success_criteria: test runs, commits, measurements. -->
+- Walking skeleton (U-MTGVCUWN5POPRG5D), 2026-10-23: an unmodified app process sets and gets secrets via Caddy at https://test.kvx.localhost; the data dir holds no plaintext name or value (partial evidence for criteria 1 and 2).
 
 ## Harvest
 - [ ] decision: pure .NET over Go (audience, DPAPI, Aspire; distribution recoverable by packaging)
@@ -51,3 +52,4 @@ Initializing: design questions settled (DESIGN.md "Settled"); ready to enter exe
 - 2026-10-23 initialized; .NET chosen after build-vs-buy and Go-vs-.NET discussion
 - 2026-10-23 settled auth (ephemeral dev tokens), host scheme, Caddy TLS, systemd-creds, whole-store encryption
 - 2026-10-23 phase initialize → execute
+- 2026-10-23 walking-skeleton milestone delivered and closed
