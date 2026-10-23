@@ -21,6 +21,12 @@ public sealed class KvxOptions
     /// <summary>Empty means $XDG_RUNTIME_DIR/kvx/dev-token.</summary>
     public string TokenFile { get; set; } = "";
 
+    /// <summary>
+    /// Comma-separated developer credentials (tried in order) that serve token requests for resources other than kvx,
+    /// so apps can reach real Azure services too. Empty turns passthrough off. See <see cref="Auth.Upstream"/>.
+    /// </summary>
+    public string Passthrough { get; set; } = "";
+
     public string ResolveDataDir()
     {
         if (!string.IsNullOrEmpty(DataDir)) return DataDir;

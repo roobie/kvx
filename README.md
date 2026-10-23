@@ -3,11 +3,15 @@
 A local, encrypted-at-rest stand-in for Azure Key Vault secrets, so development secrets stop living in plaintext.
 
 > [!WARNING]
-> **An app pointed at kvx through `DefaultAzureCredential` cannot reach any other Azure service.**
+> **An app pointed at kvx through `DefaultAzureCredential` gets *all* its Azure tokens through kvx — and reaches every other Azure service as *you*, only if you are signed in.**
 >
-> `DefaultAzureCredential` keeps using the first credential that works. Once the app has a token from kvx, every Azure client in that process (Storage, Service Bus, Cosmos DB, ARM, …) asks kvx for its token too. kvx refuses those requests, so the calls fail with `AuthenticationFailedException` naming kvx.
+> `DefaultAzureCredential` keeps using the first credential that works. Once the app has a token from kvx, every Azure client in that process (Storage, Service Bus, Cosmos DB, ARM, …) asks kvx for its token too. kvx answers Key Vault itself and passes every other request through to your own login:
 >
-> Use kvx this way only for apps whose sole Azure dependency is Key Vault secrets. If your app also calls other Azure services, do not set the variables below. Until kvx supports that combination, those apps need a code change to give Key Vault and the other services separate credentials.
+> - **You must be signed in** with `az login`, `azd auth login`, Visual Studio or `Connect-AzAccount`, in the session kvx runs in. Otherwise those calls fail with `AuthenticationFailedException`, and the message says to sign in.
+> - **The app acts as you, not as its managed identity.** It sees your role assignments, your default tenant and your subscriptions, so access that works locally may still fail in production, and the reverse.
+> - **Anything holding the session token can get your Azure tokens from kvx.** That is the same reach as running `az account get-access-token` yourself, since the token file is readable only by you.
+>
+> Set `Kvx:Passthrough` to an empty string to turn passthrough off. Apps then reach only Key Vault through kvx.
 
 ## Using it from an unmodified app
 

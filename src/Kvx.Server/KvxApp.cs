@@ -3,6 +3,7 @@ using Kvx.Server.Api;
 using Kvx.Server.Auth;
 using Kvx.Server.Keys;
 using Kvx.Server.Storage;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 
 namespace Kvx.Server;
@@ -26,6 +27,7 @@ public static class KvxApp
             sp.GetRequiredService<ILoggerFactory>().CreateLogger<SealedStore>()));
         builder.Services.AddSingleton<SecretRepository>();
         builder.Services.AddSingleton<DevTokens>();
+        builder.Services.TryAddSingleton(sp => Upstream.FromConfig(sp.GetRequiredService<IOptions<KvxOptions>>().Value.Passthrough));
         builder.Services.ConfigureHttpJsonOptions(o =>
             o.SerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull);
 

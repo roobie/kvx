@@ -4,6 +4,7 @@ using System.Net.Sockets;
 using System.Text.Json;
 using Kvx.Server;
 using Kvx.Server.Auth;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Kvx.Tests;
 
@@ -30,7 +31,7 @@ public sealed class CaddyEndToEndTests : IAsyncLifetime
             $"--urls=http://127.0.0.1:{_kvxPort}",
             $"--Kvx:DataDir={Path.Combine(_dir.Path, "data")}",
             $"--Kvx:TokenFile={TokenFile}",
-        ]);
+        ], b => b.Services.AddSingleton(FakeLogin.Upstream));
         await _kvx.StartAsync();
 
         var psi = Redirected("caddy", "run", "--adapter", "caddyfile", "--config", Path.Combine(AppContext.BaseDirectory, "Caddyfile"));
@@ -87,6 +88,8 @@ public sealed class CaddyEndToEndTests : IAsyncLifetime
         Assert.StartsWith($"{vault}/secrets/conn-string/", result.RootElement.GetProperty("id").GetString());
         Assert.Equal("Server=db;Password=hunter2", result.RootElement.GetProperty("latest").GetString());
         Assert.Equal("Server=db;Password=hunter2", result.RootElement.GetProperty("byVersion").GetString());
+        // Same process, same credential: a non-Key Vault resource is served by the developer's login, not refused.
+        Assert.Equal(FakeLogin.TokenFor("https://storage.azure.com/.default"), result.RootElement.GetProperty("storageToken").GetString());
     }
 
     private async Task<string> CaddyRoot()

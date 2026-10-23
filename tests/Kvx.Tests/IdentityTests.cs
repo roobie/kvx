@@ -48,14 +48,54 @@ public sealed class IdentityTests : IDisposable
     }
 
     [Fact]
-    public async Task Other_resources_are_400_with_a_reason()
+    public async Task Other_resources_pass_through_to_the_developer_login()
     {
         using var kvx = new KvxHost(_dir);
+        var response = await kvx.CreateClient().SendAsync(TokenRequest(kvx.Token, "https://management.azure.com/"));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(FakeLogin.TokenFor("https://management.azure.com/.default"), body.RootElement.GetProperty("access_token").GetString());
+    }
+
+    [Fact]
+    public async Task Passthrough_needs_the_session_token_too()
+    {
+        using var kvx = new KvxHost(_dir);
+        var response = await kvx.CreateClient().SendAsync(TokenRequest("not-the-token", "https://management.azure.com"));
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Without_a_developer_login_other_resources_are_400_saying_how_to_sign_in()
+    {
+        using var kvx = new KvxHost(_dir, upstream: new Upstream(new NoLogin(), "`az login`"));
+        var response = await kvx.CreateClient().SendAsync(TokenRequest(kvx.Token, "https://storage.azure.com"));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Contains("az login", body.RootElement.GetProperty("error").GetProperty("message").GetString());
+    }
+
+    [Fact]
+    public async Task With_passthrough_off_other_resources_are_400_with_a_reason()
+    {
+        using var kvx = new KvxHost(_dir, upstream: Upstream.FromConfig(""));
         var response = await kvx.CreateClient().SendAsync(TokenRequest(kvx.Token, "https://management.azure.com"));
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        Assert.Contains("management.azure.com", body.RootElement.GetProperty("error").GetProperty("message").GetString());
+        var message = body.RootElement.GetProperty("error").GetProperty("message").GetString();
+        Assert.Contains("management.azure.com", message);
+        Assert.Contains("Kvx:Passthrough", message);
+    }
+
+    [Fact]
+    public void Passthrough_config_rejects_unknown_credentials()
+    {
+        Assert.Null(Upstream.FromConfig(" ").Credential);
+        Assert.NotNull(Upstream.FromConfig("AzureCli, AzureDeveloperCli").Credential);
+        Assert.Contains("Nope", Assert.Throws<InvalidOperationException>(() => Upstream.FromConfig("AzureCli,Nope")).Message);
     }
 
     [Fact]
