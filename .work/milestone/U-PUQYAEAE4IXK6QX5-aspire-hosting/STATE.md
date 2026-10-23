@@ -31,10 +31,10 @@ Out: a client integration package (Aspire's own is used unchanged); publish-mode
 - Aspire 13.6.3 is current. It serves and trusts the ASP.NET Core dev cert itself, and adds dev-cert trust to non-.NET resources through SSL_CERT_DIR. The community Key Vault emulator's `RunAsEmulator` is prior art for redirecting the vault resource.
 
 ## Now
-README has the Aspire section; `dotnet pack src/Kvx.Aspire.Hosting -o ./artifacts` packs beside the tool (artifacts/ now ignored).
+All criteria have evidence; ready to finalize.
 
 ## Next
-- Smoke on BR's machine: reinstall the tool (the installed one lacks `describe` and `--reuse`), run the sample AppHost against the developer's kvx and the dev cert.
+- Finalize: harvest, close.
 
 ## Evidence
 - Criterion 3: `A_second_server_on_the_same_store_refuses_and_names_the_first` passes; the test run holds the store, and a second `kvx` process exits 1 naming its process id. 47/47 tests.
@@ -45,6 +45,7 @@ README has the Aspire section; `dotnet pack src/Kvx.Aspire.Hosting -o ./artifact
   - `Uses_the_kvx_already_serving_and_its_imported_secrets`: with a kvx already serving and `kvx import` done, the AppHost's kvx defers to it, the worker sees the imported secret, and the developer's kvx outlives the AppHost.
   - `Publish_mode_is_untouched`: same annotations and resources as without `RunAsKvx`.
 - Trust: Aspire 13.6 sets its own SSL_CERT_DIR on every resource (a per-resource certs dir plus the system dirs), overwriting one set by an environment callback. kvx's certificates therefore go in through a `CertificateAuthorityCollection` on each referencing resource, and Aspire writes them out in a form both .NET and curl accept.
+- Criterion 6: README has the Aspire section; the package packs into `./artifacts` beside the tool. On BR's machine, with the tool installed globally from `./artifacts`, the sample AppHost (`--launch-profile https`) started `kvx serve --reuse`, the worker wrote `sample-greeting`, a curl with a kvx identity token read it back over TLS trusted through `kvx env`'s SSL_CERT_DIR, and stopping the AppHost stopped kvx.
 
 ## Harvest
 - [ ] decision: one serving kvx per store, enforced by an OS file lock held while serving (released by the OS on a crash, so never stale), not a PID file or a port probe
