@@ -31,10 +31,9 @@ Out: a client integration package (Aspire's own is used unchanged); publish-mode
 - Aspire 13.6.3 is current. It serves and trusts the ASP.NET Core dev cert itself, and adds dev-cert trust to non-.NET resources through SSL_CERT_DIR. The community Key Vault emulator's `RunAsEmulator` is prior art for redirecting the vault resource.
 
 ## Now
-Hosting package, sample AppHost and Aspire tests work end to end; committing.
+README has the Aspire section; `dotnet pack src/Kvx.Aspire.Hosting -o ./artifacts` packs beside the tool (artifacts/ now ignored).
 
 ## Next
-- README Aspire section; pack Kvx.Aspire.Hosting beside the tool.
 - Smoke on BR's machine: reinstall the tool (the installed one lacks `describe` and `--reuse`), run the sample AppHost against the developer's kvx and the dev cert.
 
 ## Evidence
