@@ -1,15 +1,15 @@
 ---
-phase: execute
+phase: finalize
 parent: U-RPH4YXDO25THRKKI
 owner:
   - BR
   - claude
 created: 2026-10-23
 success_criteria:
-  - "`dotnet pack` produces a dotnet tool; installed to a fresh tool path, `kvx` serves from any working directory, and `kvx env` prints exports that a POSIX shell and fish accept"
-  - "`kvx run -- <app>` runs an unmodified DefaultAzureCredential app that round-trips secrets through Caddy, even with stray AZURE_* credential variables in the caller's environment, and exits with the app's exit code"
-  - "`kvx run` with no kvx serving exits non-zero without starting the app, and says how to start kvx"
-  - "`kvx import` moves a project's user-secrets into a vault under Key Vault configuration-provider names (`:` → `--`), reports keys it cannot map, and the app reads them back through AddAzureKeyVault"
+  - `dotnet pack` produces a dotnet tool; installed to a fresh tool path, `kvx` serves from any working directory, and `kvx env` prints exports that a POSIX shell and fish accept
+  - `kvx run -- <app>` runs an unmodified DefaultAzureCredential app that round-trips secrets through Caddy, even with stray AZURE_* credential variables in the caller's environment, and exits with the app's exit code
+  - `kvx run` with no kvx serving exits non-zero without starting the app, and says how to start kvx
+  - `kvx import` moves a project's user-secrets into a vault under Key Vault configuration-provider names (`:` → `--`), reports keys it cannot map, and the app reads them back through AddAzureKeyVault
   - the README documents install, serve, run, env and import
 ---
 
@@ -35,19 +35,22 @@ Promoted from backlog: B-UW2PA4KWMLEWUDVQ kvx env / kvx run to inject identity v
 Developers currently have to set IDENTITY_ENDPOINT, and copy IDENTITY_HEADER from the token file, by hand. That is friction, and an easy place to leak the token into shell history.
 
 ## Now
-Tool packaging: `dotnet pack`, install to a fresh tool path, serve from another directory.
+Finalize: all criteria hold.
 
 ## Next
-- README: install, serve, run, env, import.
-- Finalize.
+- Close.
 
 ## Evidence
 - Criteria 2–4, as processes against kvx on loopback (35/35 green): `CliTests` covers run (identity set, AZURE_CLIENT_SECRET removed and reported, exit code 7 passed through, 127 when the command is missing), refusal without a server or token file, env evaluated by sh and fish, import mapping/unmappable/unchanged/--remove-plaintext. `CaddyEndToEndTests` runs the sample app through `kvx run` with a service principal in the environment, and reads imported user-secrets back via AddAzureKeyVault.
 
+- Criterion 1: `dotnet pack` → kvx.0.1.0.nupkg; `dotnet tool install --tool-path <fresh>` installs it. Run from an unrelated directory, the installed `kvx` serves with the real systemd-creds key. `kvx env` output evaluates in sh and fish. `kvx run` removes a stray AZURE_CLIENT_SECRET and passes through exit 3. With no server it exits 1 and says "start kvx first".
+- Criterion 5: the README covers install, serve, run, env and import.
+
 ## Harvest
-- [ ] decision: one binary; no verb serves; run/env/import are clients of the serving kvx and never open the store
-- [ ] decision: the variables `kvx run` removes are configuration (Kvx:RunUnset), reported on stderr each time
-- [ ] backlog: `kvx run` forwards SIGTERM/SIGHUP to the app (today only Ctrl-C reaches it, via the process group)
+- [x] decision: one binary; no verb serves; run/env/import are clients of the serving kvx and never open the store → D-L4OU7YMFJ6W6OENA
+- [x] decision: the variables `kvx run` removes are configuration (Kvx:RunUnset), reported on stderr each time → D-IJMXLBG5U3LFTH62
+- [x] backlog: `kvx run` forwards SIGTERM/SIGHUP to the app (today only Ctrl-C reaches it, via the process group) → B-5JLATHNH7NVFA3OI
 
 ## Log
 - 2026-10-23 initialized from B-UW2PA4KWMLEWUDVQ; added import to cover project criterion 5; phase initialize → execute
+- 2026-10-23 phase execute → finalize
