@@ -33,35 +33,44 @@ Out: signing or notarising the tool; installers beyond the dotnet tool; containe
 
 ## Plan
 - Windows names: BR chose (2026-10-23) a one-time elevated setup, like `dev-certs --trust`: a Windows NRPT rule sends `.dev.localhost` to a loopback DNS responder in kvx that answers every name under the domain with loopback. Vaults then appear on first write as elsewhere. `kvx doctor` detects the missing rule and prints the setup command. Waiting for .NET 11 was rejected: its `*.localhost` fallback (dotnet/runtime#123076) is not in .NET 10, and most of the audience's apps are on .NET 8/10.
-- macOS protector: own Security.framework calls (file-based login keychain, generic password holding a key-encryption key), not MSAL Extensions: same keychain, same prompts, without the MSAL dependency. An unsigned tool is trusted by code hash, so expect an "Always Allow" prompt after a tool update; a locked keychain (SSH) fails with errSecInteractionNotAllowed, which `doctor` explains.
+- Windows rule namespace (proposed, for BR): `.localhost` rather than `.dev.localhost`. It is what RFC 6761 asks of a resolver anyway, it covers the tests' `kvxtest.localhost` and any custom vault domain, and plain `localhost` keeps resolving. The cost: while the rule exists, every `*.localhost` name on the machine needs kvx running.
+- macOS protector: own Security.framework calls (file-based login keychain, generic password holding a key-encryption key), not MSAL Extensions: same keychain, same prompts, without the MSAL dependency.
+- macOS item access (proposed, for BR): the item trusts any application of the user, not only the creating binary. The spike showed a read from another binary (what every tool update is) blocks on an invisible prompt rather than failing; per-app trust would buy nothing anyway, since DPAPI and `systemd-creds --user` already let any process of the user unwrap. User interaction is turned off so a locked keychain fails fast with errSecInteractionNotAllowed, which `doctor` explains.
 - Windows protector: DPAPI, CurrentUser. Caveat for the README: an admin password reset of a local account loses the store.
-- Proposed defaults (to confirm with BR before code): data dir `%LOCALAPPDATA%\kvx` and `~/Library/Application Support/kvx`; token in the per-user temp dir, replaced when the machine has rebooted since it was written (weaker than Linux, which also drops it at logout).
-- CI trust: Windows imports the test certificate into LocalMachine\Root, macOS adds it with `sudo security add-trusted-cert` to the System keychain; directory trust (SSL_CERT_DIR) exists only on Linux. Linux CI needs systemd ≥ 256 (a newer runner image, else a container).
+- Defaults (BR accepted 2026-10-24): data dir `%LOCALAPPDATA%\kvx` and `~/Library/Application Support/kvx`; token in the per-user temp dir, replaced when the machine has rebooted since it was written (weaker than Linux, which also drops it at logout).
+- CI trust: Windows imports the test certificate into LocalMachine\Root, macOS adds it with `sudo security add-trusted-cert` to the System keychain; directory trust (SSL_CERT_DIR) exists only on Linux. Linux CI pins `ubuntu-26.04` (systemd 259) until `ubuntu-latest` has moved to it.
 
 ## Now
-Spike run read; Windows naming decided; plan written.
+Second spike read (branch `spike/windows-macos`, GitHub only): every open question answered; two proposals wait on BR (rule namespace, macOS item access).
 
 ## Next
-- Spike on the runners, before building on them:
-  - Windows: can an unelevated kvx answer DNS on 127.0.0.1:53, and does an NRPT rule for `.dev.localhost` make .NET 10 resolve vault names through it? Which Windows editions have NRPT?
-  - macOS: a Security.framework generic password round trip from the test process.
-  - Linux: a runner image or container with systemd ≥ 256 and a user manager for `systemd-creds --user`.
+- BR: the two proposals in Plan.
+- Delete the spike branch on GitHub (its answers are recorded above).
+- Protectors, then per-OS paths and token, then the DNS responder, `doctor` and README.
 - A push mirror from gitea to GitHub (BR), until then pushed by hand with `GH_REPO_TOKEN_KVX`.
-- Protectors, then per-OS paths and token, then `doctor` and README.
+- Unverifiable in CI, for a real machine: NRPT on Home editions (research found no edition limit), Group Policy NRPT rules overriding local ones, ICS (SharedAccess) holding port 53 when Hyper-V, WSL or Docker run.
 
 ## Evidence
 - Spike run 40007803218 (2026-10-23), 3/53 passing on every OS, all other tests stopped by the key protector:
   - Windows Server (windows-latest): `secrets.dev.localhost` does **not** resolve through .NET's Dns (probed from pwsh, so the runtime may predate .NET 10: "No such host is known"); curl connects, since it resolves `*.localhost` itself.
   - macOS (macos-latest): resolves to `::1, 127.0.0.1` through .NET and curl.
   - Ubuntu (ubuntu-latest = 24.04): resolves, but systemd is 255, whose `systemd-creds` has no `--user`; kvx's Linux protector needs 256.
+- Spike run 40037860344 (2026-10-24, branch `spike/windows-macos`):
+  - Windows Server 2025: a standard (non-admin) local user binds UDP and TCP 127.0.0.1:53; SharedAccess runs but holds no port 53. `Add-DnsClientNrptRule .dev.localhost → 127.0.0.1` takes effect at once, no restart: .NET 10 resolves `secrets.` and `new-vault.dev.localhost` to 127.0.0.1 through a loopback responder; `kvxtest.localhost` needs a rule of its own (or `.localhost`); `localhost` itself keeps resolving under a `.localhost` rule; with the responder stopped the names fail again. Windows asked only for A records.
+  - macOS 26.6: a generic-password add and read round trip works in the unlocked login keychain. A read from a second binary and a read after `security lock-keychain` both **hang** (killed at 2 min) instead of returning an error.
+  - Ubuntu 26.04: systemd 259, `systemd-creds.socket` active, `systemd-creds --user` round trips as the runner user; 51/53 tests passed, the 2 failures fixed in b0f880d.
 
 ## Harvest
 - [ ] learning: stock Windows does not resolve `*.localhost` subdomains for .NET, while macOS and systemd-resolved Linux do; curl resolves them itself everywhere
 - [ ] decision: Windows vault names through a one-time NRPT rule and kvx's loopback DNS responder, not hosts entries per vault, a public loopback domain, or waiting for .NET 11
 - [ ] decision: own Security.framework calls for the macOS protector rather than MSAL Extensions
-- [ ] learning: GitHub's ubuntu-24.04 runner has systemd 255, too old for `systemd-creds --user`
+- [ ] learning: GitHub's ubuntu-24.04 runner has systemd 255, too old for `systemd-creds --user`; ubuntu-26.04 has 259, and `--user` needs only the system's `systemd-creds.socket`, no user manager
+- [ ] learning: a NRPT rule added with the cmdlet applies immediately; Group Policy NRPT rules, if any exist, silently replace all local ones
+- [ ] learning: a keychain read that needs a prompt (another binary, a locked keychain) blocks without UI instead of failing, unless user interaction is turned off
+- [ ] learning: an app run from another project's output loses its package assemblies to that project's shared framework when the runtime is newer than the packages
 
 ## Log
 - 2026-10-23 initialized; BR chose a GitHub Actions mirror for Windows and macOS proof
 - 2026-10-23 spike run: Windows does not resolve `*.localhost` for .NET; BR chose a one-time NRPT rule
 - 2026-10-24 the TLS end-to-end tests ran the sample app from the test output, which breaks once the runtime is newer than its packages (CI's 10.0.13); it now runs from its own output
+- 2026-10-24 BR accepted the data dir and token defaults; second spike answered NRPT, port 53, the login keychain and systemd on runners
