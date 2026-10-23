@@ -26,6 +26,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Kvx.Server\Kvx.Server.csproj" />
+    <ProjectReference Include="..\Kvx.SampleApp\Kvx.SampleApp.csproj" />
   </ItemGroup>
 
 </Project>

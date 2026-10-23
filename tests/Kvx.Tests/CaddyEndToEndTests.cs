@@ -1,15 +1,16 @@
 using System.Diagnostics;
 using System.Net;
-using System.Net.Security;
 using System.Net.Sockets;
-using System.Security.Cryptography.X509Certificates;
-using Azure.Core.Pipeline;
-using Azure.Security.KeyVault.Secrets;
+using System.Text.Json;
 using Kvx.Server;
 
 namespace Kvx.Tests;
 
-/// <summary>Real sockets and real TLS: kvx on loopback behind Caddy, reached by host name.</summary>
+/// <summary>
+/// Real sockets, real TLS, real name resolution: kvx on loopback behind Caddy, used by an
+/// unmodified app in its own process. Needs *.localhost resolution (nss-myhostname or
+/// systemd-resolved) and caddy on PATH.
+/// </summary>
 [Trait("Category", "E2E")]
 public sealed class CaddyEndToEndTests : IAsyncLifetime
 {
@@ -31,14 +32,7 @@ public sealed class CaddyEndToEndTests : IAsyncLifetime
         ]);
         await _kvx.StartAsync();
 
-        var psi = new ProcessStartInfo("caddy")
-        {
-            RedirectStandardError = true,
-            RedirectStandardOutput = true,
-            UseShellExecute = false,
-        };
-        foreach (var a in new[] { "run", "--adapter", "caddyfile", "--config", Path.Combine(AppContext.BaseDirectory, "Caddyfile") })
-            psi.ArgumentList.Add(a);
+        var psi = Redirected("caddy", "run", "--adapter", "caddyfile", "--config", Path.Combine(AppContext.BaseDirectory, "Caddyfile"));
         psi.Environment["XDG_DATA_HOME"] = CaddyHome;
         psi.Environment["XDG_CONFIG_HOME"] = CaddyHome;
         psi.Environment["KVX_HTTPS_PORT"] = _httpsPort.ToString();
@@ -62,62 +56,52 @@ public sealed class CaddyEndToEndTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Stock_secret_client_round_trips_through_caddy()
+    public async Task Unmodified_app_round_trips_through_caddy()
     {
-        var root = await CaddyRoot();
-        var client = new SecretClient(
-            new Uri($"https://test.kvx.localhost:{_httpsPort}"),
-            new StaticToken(await File.ReadAllTextAsync(TokenFile)),
-            new SecretClientOptions { Transport = new HttpClientTransport(TrustingOnly(root)) });
+        var vault = $"https://test.kvx.localhost:{_httpsPort}";
+        var host = new Uri(vault).Host;
+        Assert.True((await Dns.GetHostAddressesAsync(host)).Any(IPAddress.IsLoopback),
+            $"{host} does not resolve to loopback; enable nss-myhostname or systemd-resolved.");
 
-        var set = (await client.SetSecretAsync("conn-string", "Server=db;Password=hunter2")).Value;
-        Assert.Equal(new Uri($"https://test.kvx.localhost:{_httpsPort}/secrets/conn-string/{set.Properties.Version}"), set.Id);
-        Assert.Equal("Server=db;Password=hunter2", (await client.GetSecretAsync("conn-string")).Value.Value);
-        Assert.Equal("Server=db;Password=hunter2",
-            (await client.GetSecretAsync("conn-string", set.Properties.Version)).Value.Value);
+        // SSL_CERT_FILE makes this run's Caddy CA the trust root for the child, as `caddy trust` would.
+        var psi = Redirected("dotnet", Path.Combine(AppContext.BaseDirectory, "Kvx.SampleApp.dll"),
+            vault, TokenFile, "conn-string", "Server=db;Password=hunter2");
+        psi.Environment["SSL_CERT_FILE"] = await CaddyRoot();
+
+        using var app = Process.Start(psi)!;
+        var stdout = app.StandardOutput.ReadToEndAsync();
+        var stderr = app.StandardError.ReadToEndAsync();
+        await app.WaitForExitAsync();
+        Assert.True(app.ExitCode == 0, await stderr);
+
+        using var result = JsonDocument.Parse(await stdout);
+        Assert.StartsWith($"{vault}/secrets/conn-string/", result.RootElement.GetProperty("id").GetString());
+        Assert.Equal("Server=db;Password=hunter2", result.RootElement.GetProperty("latest").GetString());
+        Assert.Equal("Server=db;Password=hunter2", result.RootElement.GetProperty("byVersion").GetString());
     }
 
-    /// <summary>
-    /// Stands in for `caddy trust`: the test trusts only this run's Caddy CA rather than
-    /// touching the machine's trust store. Hostname validation stays on.
-    /// Also stands in for *.localhost name resolution, which glibc only does with
-    /// nss-myhostname or systemd-resolved; SNI and Host still carry the vault name.
-    /// </summary>
-    private static HttpMessageHandler TrustingOnly(X509Certificate2 root) => new SocketsHttpHandler
-    {
-        ConnectCallback = async (context, ct) =>
-        {
-            var socket = new Socket(SocketType.Stream, ProtocolType.Tcp) { NoDelay = true };
-            await socket.ConnectAsync(IPAddress.Loopback, context.DnsEndPoint.Port, ct);
-            return new NetworkStream(socket, ownsSocket: true);
-        },
-        SslOptions = new SslClientAuthenticationOptions
-        {
-            RemoteCertificateValidationCallback = (_, cert, presented, errors) =>
-            {
-                if (cert is null || (errors & ~SslPolicyErrors.RemoteCertificateChainErrors) != SslPolicyErrors.None)
-                    return false;
-                using var chain = new X509Chain();
-                chain.ChainPolicy.TrustMode = X509ChainTrustMode.CustomRootTrust;
-                chain.ChainPolicy.CustomTrustStore.Add(root);
-                chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
-                if (presented is not null)
-                    foreach (var element in presented.ChainElements) chain.ChainPolicy.ExtraStore.Add(element.Certificate);
-                return chain.Build(new X509Certificate2(cert));
-            },
-        },
-    };
-
-    private async Task<X509Certificate2> CaddyRoot()
+    private async Task<string> CaddyRoot()
     {
         var path = Path.Combine(CaddyHome, "caddy", "pki", "authorities", "local", "root.crt");
         for (var i = 0; i < 100; i++)
         {
             if (_caddy!.HasExited) break;
-            if (File.Exists(path) && await Listening(_httpsPort)) return X509CertificateLoader.LoadCertificateFromFile(path);
+            if (File.Exists(path) && await Listening(_httpsPort)) return path;
             await Task.Delay(100);
         }
         lock (_caddyLog) throw new TimeoutException("Caddy did not come up:\n" + string.Join('\n', _caddyLog));
+    }
+
+    private static ProcessStartInfo Redirected(string file, params string[] args)
+    {
+        var psi = new ProcessStartInfo(file)
+        {
+            RedirectStandardError = true,
+            RedirectStandardOutput = true,
+            UseShellExecute = false,
+        };
+        foreach (var a in args) psi.ArgumentList.Add(a);
+        return psi;
     }
 
     private static async Task<bool> Listening(int port)
