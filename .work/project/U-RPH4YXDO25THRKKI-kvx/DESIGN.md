@@ -22,6 +22,8 @@ Developers need secrets locally, and the convenient stores keep them in plaintex
 - Headless Linux: `systemd-creds --user` wraps the data key. It needs no UX, works unprivileged (verified on systemd 257) and uses TPM2 when present. A passphrase/agent fallback waits until someone needs it.
 - Storage: the whole store (names, tags, attributes, values) is one AES-GCM sealed file, loaded into memory and atomically replaced on write. This is simpler than per-value encryption and hides names for free. The ergonomic cost is only that the file can't be inspected directly; the CLI covers that.
 - One `kvx` tool. Its helper commands (run, env, import) are clients of the serving kvx and never open the store (D-L4OU7YMFJ6W6OENA). `kvx run` removes the credential variables that would outrank kvx (D-IJMXLBG5U3LFTH62).
+- One serving kvx per store, held by an OS file lock (D-ZSYSODY6DTOL5U54).
+- Aspire: `RunAsKvx` redirects Aspire's own Key Vault resource in run mode only (D-P2LDBKFIWXL6NNE3). The AppHost uses the developer's kvx if it serves, otherwise its own, decided by `kvx serve --reuse` (D-CRKLZYSNBG2LVRW7) from what `kvx describe` reports (D-CHUCZKSUCNIWSIB2). Trust goes in through Aspire's certificate collections (D-4YPKQQX26VJZAVPY).
 
 ## Risks & open questions
 - An app using kvx through `DefaultAzureCredential` gets every Azure token from kvx. Other resources pass through to the developer's login (D-BGGXSS3A5S3YOP24), so locally the app acts as the developer, not as its managed identity. Access can then differ from production, and kvx must find the developer's CLIs and login when running as a service.
@@ -30,4 +32,5 @@ Developers need secrets locally, and the convenient stores keep them in plaintex
 - Whole-file store: a corrupt or truncated write loses everything, so keep the previous generation. Fine for dev-sized stores (thousands of secrets), not beyond.
 - Machine-bound keys (DPAPI, systemd-creds) make a copied store useless elsewhere. That is intended, but losing the machine loses the secrets; an explicit export/backup path is needed.
 - Keyring prompts (Keychain, some Secret Service setups) can block at startup; the service must tolerate this.
+- The Aspire integration leans on Aspire internals that are public but not extension points (L-MSSJHFGW32EV6BG3); each Aspire upgrade needs the Aspire tests.
 - Must detect a missing libsecret and fail with a clear message.
