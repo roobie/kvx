@@ -1,4 +1,5 @@
 using Kvx.Server.Keys;
+using Kvx.Server.Storage;
 
 namespace Kvx.Server.Cli;
 
@@ -35,6 +36,10 @@ public static class KvxCli
         catch (KeyProtectorException e)
         {
             return Fail($"{e.Message} {DoctorHint}");
+        }
+        catch (StoreInUseException e)
+        {
+            return Fail(e.Message);
         }
     }
 

@@ -43,10 +43,15 @@ public sealed class SecretsTests : IDisposable
         using (var first = new KvxHost(_dir))
             await first.SecretClient(Vault).SetSecretAsync(name, value);
 
-        using var second = new KvxHost(_dir);
-        Assert.Equal(value, (await second.SecretClient(Vault).GetSecretAsync(name)).Value.Value);
+        string dataDir;
+        using (var second = new KvxHost(_dir))
+        {
+            Assert.Equal(value, (await second.SecretClient(Vault).GetSecretAsync(name)).Value.Value);
+            dataDir = second.DataDir;
+        }
 
-        var files = Directory.GetFiles(second.DataDir, "*", SearchOption.AllDirectories);
+        // Scanned once kvx has stopped, because a serving kvx holds the store lock open.
+        var files = Directory.GetFiles(dataDir, "*", SearchOption.AllDirectories);
         Assert.NotEmpty(files);
         foreach (var file in files)
         {

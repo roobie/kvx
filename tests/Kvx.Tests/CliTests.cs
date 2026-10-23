@@ -130,6 +130,21 @@ public sealed class CliTests : IAsyncLifetime
         Assert.Contains("kvx doctor", result.Stderr);
     }
 
+    [Fact]
+    public async Task A_second_server_on_the_same_store_refuses_and_names_the_first()
+    {
+        using var dir = new TempDir();
+        var result = await LiveKvx.Cli([
+            $"--urls=https://127.0.0.1:{LiveKvx.FreePort()};http://127.0.0.1:{LiveKvx.FreePort()}",
+            $"--Kvx:DataDir={_kvx.DataDir}",
+            $"--Kvx:TokenFile={Path.Combine(dir.Path, "dev-token")}",
+            .. _kvx.CertificateSettings,
+        ]);
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Contains($"in use by another kvx (process {Environment.ProcessId})", result.Stderr);
+    }
+
     private static bool OnPath(string command) =>
         (Environment.GetEnvironmentVariable("PATH") ?? "").Split(':').Any(d => File.Exists(Path.Combine(d, command)));
 }

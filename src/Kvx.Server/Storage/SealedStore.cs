@@ -3,11 +3,14 @@ using Kvx.Server.Keys;
 
 namespace Kvx.Server.Storage;
 
+/// <summary>Another kvx serves from this data dir; a second writer would lose updates.</summary>
+public sealed class StoreInUseException(string message) : Exception(message);
+
 /// <summary>
 /// One AES-GCM sealed file holding the whole store, so names and metadata are as protected as values.
 /// The previous generation is kept so a torn write never loses everything.
 /// </summary>
-public sealed class SealedStore
+public sealed class SealedStore : IDisposable
 {
     // The magic is also the AAD, so a blob sealed for one purpose cannot be passed off as another.
     private static readonly byte[] StoreMagic = "KVX1"u8.ToArray();
@@ -17,35 +20,69 @@ public sealed class SealedStore
     private readonly string _store, _previous, _temp;
     private readonly byte[] _key;
     private readonly ILogger _log;
+    private readonly FileStream _lock;
 
-    private SealedStore(string dir, byte[] key, ILogger log)
+    private SealedStore(string dir, byte[] key, ILogger log, FileStream heldLock)
     {
         _store = Path.Combine(dir, "store.kvx");
         _previous = Path.Combine(dir, "store.kvx.prev");
         _temp = Path.Combine(dir, "store.kvx.tmp");
         _key = key;
         _log = log;
+        _lock = heldLock;
     }
 
     public static SealedStore Open(string dir, IKeyProtector protector, ILogger log)
     {
         PrivateFiles.CreateDirectory(dir);
-        var keyFile = Path.Combine(dir, "data-key.cred");
-        byte[] key;
-        if (File.Exists(keyFile))
+        var heldLock = Lock(dir);
+        try
         {
-            key = protector.Unwrap(File.ReadAllBytes(keyFile));
+            var keyFile = Path.Combine(dir, "data-key.cred");
+            byte[] key;
+            if (File.Exists(keyFile))
+            {
+                key = protector.Unwrap(File.ReadAllBytes(keyFile));
+            }
+            else
+            {
+                if (File.Exists(Path.Combine(dir, "store.kvx")))
+                    throw new InvalidOperationException($"{dir} has a store but no data key; refusing to start.");
+                key = RandomNumberGenerator.GetBytes(32);
+                PrivateFiles.Write(keyFile + ".tmp", protector.Wrap(key));
+                File.Move(keyFile + ".tmp", keyFile);
+            }
+            return new SealedStore(dir, key, log, heldLock);
         }
-        else
+        catch
         {
-            if (File.Exists(Path.Combine(dir, "store.kvx")))
-                throw new InvalidOperationException($"{dir} has a store but no data key; refusing to start.");
-            key = RandomNumberGenerator.GetBytes(32);
-            PrivateFiles.Write(keyFile + ".tmp", protector.Wrap(key));
-            File.Move(keyFile + ".tmp", keyFile);
+            heldLock.Dispose();
+            throw;
         }
-        return new SealedStore(dir, key, log);
     }
+
+    /// <summary>
+    /// Held while serving. The OS drops it when the process dies, so a crash never leaves the store locked.
+    /// The holder's process id sits in a separate file because the lock file itself cannot be read while held.
+    /// </summary>
+    private static FileStream Lock(string dir)
+    {
+        var owner = Path.Combine(dir, "store.owner");
+        try
+        {
+            var held = new FileStream(Path.Combine(dir, "store.lock"), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+            PrivateFiles.Write(owner, System.Text.Encoding.UTF8.GetBytes(Environment.ProcessId.ToString()));
+            return held;
+        }
+        catch (IOException)
+        {
+            var pid = File.Exists(owner) ? File.ReadAllText(owner).Trim() : "unknown";
+            throw new StoreInUseException($"the store in {dir} is in use by another kvx (process {pid}). " +
+                                          "Use that kvx, or stop it before starting this one.");
+        }
+    }
+
+    public void Dispose() => _lock.Dispose();
 
     /// <summary>The plaintext, or null when no store exists yet.</summary>
     public byte[]? Load()

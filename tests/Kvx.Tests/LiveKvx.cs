@@ -23,6 +23,7 @@ public sealed class LiveKvx : IAsyncDisposable
     public string TokenFile => Path.Combine(Dir.Path, "run", "dev-token");
     public string Urls => $"http://127.0.0.1:{Port}";
     public string TrustDir => Path.Combine(Dir.Path, "trust");
+    public string DataDir => Path.Combine(Dir.Path, "data");
     private string CertFile => Path.Combine(Dir.Path, "kvx.pfx");
 
     /// <summary>The settings a client command needs to find this server and pass its trust on.</summary>
@@ -49,7 +50,7 @@ public sealed class LiveKvx : IAsyncDisposable
         WriteCertificate(CertFile, TrustDir, Domain, DateTimeOffset.UtcNow.AddMinutes(-5), DateTimeOffset.UtcNow.AddDays(30));
         _app = KvxApp.Build([
             .. ClientSettings,
-            $"--Kvx:DataDir={Path.Combine(Dir.Path, "data")}",
+            $"--Kvx:DataDir={DataDir}",
             .. CertificateSettings,
         ], b => b.Services.AddSingleton(FakeLogin.Upstream));
         await _app.StartAsync();

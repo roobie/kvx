@@ -35,12 +35,13 @@ Spike: redirect an Aspire 13.6.3 Key Vault resource to a running kvx.
 
 ## Next
 - Spike: an AppHost on Aspire 13.6.3 whose Key Vault resource is marked as an emulator and redirected to a running kvx; confirm no provisioning and that the app's client reaches kvx.
-- Store lock in kvx, with a test.
 - Hosting package, start-or-reuse, identity wiring, tests, README, sample, smoke.
 
 ## Evidence
+- Criterion 3: `A_second_server_on_the_same_store_refuses_and_names_the_first` passes; the test run holds the store, and a second `kvx` process exits 1 naming its process id. 47/47 tests.
 
 ## Harvest
+- [ ] decision: one serving kvx per store, enforced by an OS file lock held while serving (released by the OS on a crash, so never stale), not a PID file or a port probe
 
 ## Log
 - 2026-10-23 initialized; BR chose start-or-reuse of the user's kvx
