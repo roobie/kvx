@@ -54,6 +54,7 @@ public sealed class CliTests : IAsyncLifetime
         Assert.NotEqual(0, result.ExitCode);
         Assert.False(File.Exists(marker));
         Assert.Contains("start kvx", result.Stderr);
+        Assert.Contains("kvx doctor", result.Stderr);
     }
 
     [Fact]
@@ -126,6 +127,7 @@ public sealed class CliTests : IAsyncLifetime
 
         Assert.Equal(1, result.ExitCode);
         Assert.Contains("dotnet dev-certs https --trust", result.Stderr);
+        Assert.Contains("kvx doctor", result.Stderr);
     }
 
     private static bool OnPath(string command) =>

@@ -20,7 +20,7 @@ public static class EnvCommand
             return KvxCli.Fail($"unknown shell '{shell}'; use one of: {string.Join(", ", Syntax.Keys)}");
 
         var (client, error) = await KvxClient.Connect(overrides.ToArray());
-        if (client is null) return KvxCli.Fail(error!);
+        if (client is null) return KvxCli.FailToConnect(error!);
 
         foreach (var name in client.Options.RunUnset)
             if (Environment.GetEnvironmentVariable(name) is not null)

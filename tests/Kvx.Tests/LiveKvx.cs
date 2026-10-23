@@ -38,14 +38,19 @@ public sealed class LiveKvx : IAsyncDisposable
 
     private Microsoft.AspNetCore.Builder.WebApplication? _app;
 
+    /// <summary>The settings that make kvx serve this server's certificate.</summary>
+    public string[] CertificateSettings => Certificate(CertFile);
+
+    public static string[] Certificate(string pfx) =>
+        [$"--Kestrel:Certificates:Default:Path={pfx}", $"--Kestrel:Certificates:Default:Password={CertPassword}"];
+
     public async Task StartAsync()
     {
-        WriteCertificate();
+        WriteCertificate(CertFile, TrustDir, Domain, DateTimeOffset.UtcNow.AddMinutes(-5), DateTimeOffset.UtcNow.AddDays(30));
         _app = KvxApp.Build([
             .. ClientSettings,
             $"--Kvx:DataDir={Path.Combine(Dir.Path, "data")}",
-            $"--Kestrel:Certificates:Default:Path={CertFile}",
-            "--Kestrel:Certificates:Default:Password=test",
+            .. CertificateSettings,
         ], b => b.Services.AddSingleton(FakeLogin.Upstream));
         await _app.StartAsync();
     }
@@ -56,21 +61,24 @@ public sealed class LiveKvx : IAsyncDisposable
         Dir.Dispose();
     }
 
-    private void WriteCertificate()
+    private const string CertPassword = "test";
+
+    /// <summary>A self-signed server certificate for *.<paramref name="domain"/> as a .pfx, and its PEM in <paramref name="trustDir"/>.</summary>
+    public static void WriteCertificate(string pfx, string trustDir, string domain, DateTimeOffset notBefore, DateTimeOffset notAfter)
     {
         using var key = RSA.Create(2048);
-        var request = new CertificateRequest($"CN={Domain}", key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        var request = new CertificateRequest($"CN={domain}", key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
         var names = new SubjectAlternativeNameBuilder();
-        names.AddDnsName($"*.{Domain}");
+        names.AddDnsName($"*.{domain}");
         names.AddIpAddress(IPAddress.Loopback);
         request.CertificateExtensions.Add(names.Build());
         request.CertificateExtensions.Add(new X509BasicConstraintsExtension(false, false, 0, true));
         request.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension([new Oid("1.3.6.1.5.5.7.3.1")], false));
-        using var cert = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddMinutes(-5), DateTimeOffset.UtcNow.AddDays(1));
+        using var cert = request.CreateSelfSigned(notBefore, notAfter);
 
-        File.WriteAllBytes(CertFile, cert.Export(X509ContentType.Pfx, "test"));
-        Directory.CreateDirectory(TrustDir);
-        File.WriteAllText(Path.Combine(TrustDir, "kvxtest.pem"), cert.ExportCertificatePem());
+        File.WriteAllBytes(pfx, cert.Export(X509ContentType.Pfx, CertPassword));
+        Directory.CreateDirectory(trustDir);
+        File.WriteAllText(Path.Combine(trustDir, $"{Path.GetFileNameWithoutExtension(pfx)}.pem"), cert.ExportCertificatePem());
     }
 
     /// <summary>Runs `kvx args…` as its own process, the way a developer does.</summary>

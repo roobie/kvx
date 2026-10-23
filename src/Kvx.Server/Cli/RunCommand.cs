@@ -19,7 +19,7 @@ public static class RunCommand
         if (command.Length == 0) return KvxCli.Fail("usage: kvx run [--setting=value… --] <app> [args…]");
 
         var (client, error) = await KvxClient.Connect(overrides);
-        if (client is null) return KvxCli.Fail(error!);
+        if (client is null) return KvxCli.FailToConnect(error!);
 
         var start = new ProcessStartInfo(command[0]) { UseShellExecute = false };
         foreach (var arg in command[1..]) start.ArgumentList.Add(arg);

@@ -57,14 +57,14 @@ public sealed class KvxClient
     }
 
     /// <summary>
-    /// The first plain-http listen URL, with a wildcard host made reachable as loopback. Clients and the identity
-    /// endpoint use it so that nothing but the app's vault calls depends on certificate trust, as in Azure, where
-    /// IDENTITY_ENDPOINT is plain http too.
+    /// The first listen URL of the scheme, with a wildcard host made reachable as loopback. Clients and the identity
+    /// endpoint use the plain-http one so that nothing but the app's vault calls depends on certificate trust, as in
+    /// Azure, where IDENTITY_ENDPOINT is plain http too.
     /// </summary>
-    internal static Uri? ListenEndpoint(string? urls)
+    internal static Uri? ListenEndpoint(string? urls, string scheme = "http")
     {
         var first = urls?.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .FirstOrDefault(u => u.StartsWith("http://", StringComparison.OrdinalIgnoreCase));
+            .FirstOrDefault(u => u.StartsWith($"{scheme}://", StringComparison.OrdinalIgnoreCase));
         if (first is null) return null;
         foreach (var wildcard in new[] { "://*:", "://+:", "://0.0.0.0:", "://[::]:" })
             first = first.Replace(wildcard, "://127.0.0.1:");

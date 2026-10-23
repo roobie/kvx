@@ -22,6 +22,8 @@ dotnet tool install --global kvx --add-source ./artifacts
 
 Settings live in `appsettings.json` next to the installed tool. Any of them can be overridden per command, for example `--urls=…` or `--Kvx:Passthrough=`. Client commands must use the same `urls` and `Kvx:TokenFile` as the server they talk to.
 
+**When something does not work, run `kvx doctor` first.** It checks what kvx needs from the machine (vault names resolving to loopback, a valid and trusted certificate for them, the key protector, a serving kvx) and says how to fix each problem, because those problems otherwise show up as SDK errors that don't name the cause.
+
 ## Serve
 
 ```sh

@@ -48,7 +48,7 @@ public static partial class ImportCommand
         if (!File.Exists(path)) return KvxCli.Fail($"no secrets file at {path}");
 
         var (client, error) = await KvxClient.Connect(overrides.ToArray());
-        if (client is null) return KvxCli.Fail(error!);
+        if (client is null) return KvxCli.FailToConnect(error!);
 
         var entries = new ConfigurationBuilder().AddJsonFile(path, optional: false).Build()
             .AsEnumerable().Where(kv => kv.Value is not null).OrderBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase).ToList();
