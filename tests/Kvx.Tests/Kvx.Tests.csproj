@@ -22,6 +22,14 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
+  <!-- The sample app runs from its own output: copied here, its packages lose to the test's shared framework when the runtime is newer. -->
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>SampleAppDir</_Parameter1>
+      <_Parameter2>$(MSBuildThisFileDirectory)../Kvx.SampleApp/bin/$(Configuration)/$(TargetFramework)/</_Parameter2>
+    </AssemblyAttribute>
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\..\src\Kvx.Server\Kvx.Server.csproj" />
     <ProjectReference Include="..\Kvx.SampleApp\Kvx.SampleApp.csproj" />

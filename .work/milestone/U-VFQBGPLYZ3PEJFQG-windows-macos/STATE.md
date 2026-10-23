@@ -64,3 +64,4 @@ Spike run read; Windows naming decided; plan written.
 ## Log
 - 2026-10-23 initialized; BR chose a GitHub Actions mirror for Windows and macOS proof
 - 2026-10-23 spike run: Windows does not resolve `*.localhost` for .NET; BR chose a one-time NRPT rule
+- 2026-10-24 the TLS end-to-end tests ran the sample app from the test output, which breaks once the runtime is newer than its packages (CI's 10.0.13); it now runs from its own output

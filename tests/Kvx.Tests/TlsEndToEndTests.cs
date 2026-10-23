@@ -11,7 +11,10 @@ namespace Kvx.Tests;
 public sealed class TlsEndToEndTests : IAsyncLifetime
 {
     private readonly LiveKvx _kvx = new();
-    private static string SampleApp => Path.Combine(AppContext.BaseDirectory, "Kvx.SampleApp.dll");
+    private static string SampleApp => Path.GetFullPath(Path.Combine(
+        typeof(TlsEndToEndTests).Assembly.GetCustomAttributes(typeof(System.Reflection.AssemblyMetadataAttribute), false)
+            .Cast<System.Reflection.AssemblyMetadataAttribute>().Single(a => a.Key == "SampleAppDir").Value!,
+        "Kvx.SampleApp.dll"));
 
     public Task InitializeAsync() => _kvx.StartAsync();
     public Task DisposeAsync() => _kvx.DisposeAsync().AsTask();
