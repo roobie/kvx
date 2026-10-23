@@ -10,7 +10,8 @@ public sealed class KvxOptions
     /// <summary>Sent in the auth challenge; the SDK takes the tenant id from its first path segment.</summary>
     [Required, Url] public string AuthorizationUri { get; set; } = "";
 
-    [Required] public string KeyProtector { get; set; } = "";
+    /// <summary>systemd-creds, dpapi or keychain; empty means the OS's own (see <see cref="Keys.KeyProtectors.Name"/>).</summary>
+    public string KeyProtector { get; set; } = "";
     [Required] public string KeyCredentialName { get; set; } = "";
     [Required] public string RecoveryLevel { get; set; } = "";
     [Range(7, 90)] public int RecoverableDays { get; set; }

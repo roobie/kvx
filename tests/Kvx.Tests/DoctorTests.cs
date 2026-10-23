@@ -120,8 +120,21 @@ public sealed class DoctorTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Another_OSs_key_protector_fails_with_the_fix_to_use_this_ones()
+    {
+        var foreign = OperatingSystem.IsWindows() ? "keychain" : "dpapi";
+        var result = await Doctor([.. NotServing(), .. _kvx.CertificateSettings, $"--Kvx:KeyProtector={foreign}"]);
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Contains("does not exist on", Line(result, "key protector"));
+        Assert.Contains("leave Kvx:KeyProtector empty", result.Stdout);
+    }
+
+    [Fact]
     public async Task A_missing_systemd_creds_fails_with_the_version_needed()
     {
+        // Linux only by nature: it hides systemd-creds by emptying PATH.
+        if (!OperatingSystem.IsLinux()) return;
         using var empty = new TempDir();
         var dotnet = (Environment.GetEnvironmentVariable("PATH") ?? "").Split(':')
             .Select(d => Path.Combine(d, "dotnet")).First(File.Exists);

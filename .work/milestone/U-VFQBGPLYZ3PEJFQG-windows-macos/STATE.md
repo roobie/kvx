@@ -36,16 +36,16 @@ Out: signing or notarising the tool; installers beyond the dotnet tool; containe
 - Windows rule namespace (BR chose 2026-10-24): `.localhost` rather than `.dev.localhost`. It is what RFC 6761 asks of a resolver anyway, it covers the tests' `kvxtest.localhost` and any custom vault domain, and plain `localhost` keeps resolving. The cost: while the rule exists, every `*.localhost` name on the machine needs kvx running.
 - macOS protector: own Security.framework calls (file-based login keychain, generic password holding a key-encryption key), not MSAL Extensions: same keychain, same prompts, without the MSAL dependency.
 - macOS item access (BR chose 2026-10-24): the item trusts any application of the user, not only the creating binary. The spike showed a read from another binary (what every tool update is) blocks on an invisible prompt rather than failing; per-app trust would buy nothing anyway, since DPAPI and `systemd-creds --user` already let any process of the user unwrap. User interaction is turned off so a locked keychain fails fast with errSecInteractionNotAllowed, which `doctor` explains.
+- Hosts-file fallback (BR, 2026-10-24): where port 53 or NRPT can't be used (port taken by ICS, Group Policy NRPT, no admin), a line per vault in the OS hosts file (`/etc/hosts`, `%SystemRoot%\System32\drivers\etc\hosts`) stays a supported way. `doctor` names that file in its fix and must not report FAIL for a hosts-file user just because its probe name `kvx-doctor.<domain>` has no line: it checks the existing vaults' names.
 - Windows protector: DPAPI, CurrentUser. Caveat for the README: an admin password reset of a local account loses the store.
 - Defaults (BR accepted 2026-10-24): data dir `%LOCALAPPDATA%\kvx` and `~/Library/Application Support/kvx`; token in the per-user temp dir, replaced when the machine has rebooted since it was written (weaker than Linux, which also drops it at logout).
 - CI trust: Windows imports the test certificate into LocalMachine\Root, macOS adds it with `sudo security add-trusted-cert` to the System keychain; directory trust (SSL_CERT_DIR) exists only on Linux. Linux CI pins `ubuntu-26.04` (systemd 259) until `ubuntu-latest` has moved to it.
 
 ## Now
-Second spike read (branch `spike/windows-macos`, GitHub only): every open question answered; BR settled the rule namespace and macOS item access. Ready for execute.
+Slice os-key-protectors (U-6QK5LH57XTDAZJ36) executing.
 
 ## Next
-- Delete the spike branch on GitHub (its answers are recorded above).
-- Protectors, then per-OS paths and token, then the DNS responder, `doctor` and README.
+- Per-OS paths and token, then the DNS responder with NRPT setup, `doctor` (hosts fallback per vault) and README. The spike's responder (local branch `spike/windows-macos`, `spike/SpikeDns`) is the starting point.
 - A push mirror from gitea to GitHub (BR), until then pushed by hand with `GH_REPO_TOKEN_KVX`.
 - Unverifiable in CI, for a real machine: NRPT on Home editions (research found no edition limit), Group Policy NRPT rules overriding local ones, ICS (SharedAccess) holding port 53 when Hyper-V, WSL or Docker run.
 
@@ -65,6 +65,7 @@ Second spike read (branch `spike/windows-macos`, GitHub only): every open questi
 - [ ] decision: Windows vault names through a one-time NRPT rule and kvx's loopback DNS responder, not hosts entries per vault, a public loopback domain, or waiting for .NET 11
 - [ ] decision: own Security.framework calls for the macOS protector rather than MSAL Extensions
 - [ ] decision: the Windows rule covers all of `.localhost`, not only the vault domain
+- [ ] decision: hosts-file lines per vault stay a supported fallback on every OS where the responder or NRPT can't be used
 - [ ] decision: the macOS keychain item trusts any app of the user, matching DPAPI and `systemd-creds --user`, with user interaction off
 - [ ] learning: GitHub's ubuntu-24.04 runner has systemd 255, too old for `systemd-creds --user`; ubuntu-26.04 has 259, and `--user` needs only the system's `systemd-creds.socket`, no user manager
 - [ ] learning: a NRPT rule added with the cmdlet applies immediately; Group Policy NRPT rules, if any exist, silently replace all local ones
@@ -77,3 +78,4 @@ Second spike read (branch `spike/windows-macos`, GitHub only): every open questi
 - 2026-10-24 the TLS end-to-end tests ran the sample app from the test output, which breaks once the runtime is newer than its packages (CI's 10.0.13); it now runs from its own output
 - 2026-10-24 BR accepted the data dir and token defaults; second spike answered NRPT, port 53, the login keychain and systemd on runners
 - 2026-10-23 phase initialize → execute
+- 2026-10-24 BR: the hosts file stays a supported fallback where port 53 doesn't work; slice os-key-protectors started

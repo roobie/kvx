@@ -52,10 +52,15 @@ public static class DoctorCommand
     private static async Task<Finding> NameResolution(string host, string domain)
     {
         const string check = "name resolution";
+        var hosts = OperatingSystem.IsWindows()
+            ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "drivers", "etc", "hosts")
+            : "/etc/hosts";
+        var perVault = $"add `127.0.0.1 <vault>.{domain}` to {hosts} for each vault";
         var fix = OperatingSystem.IsLinux()
             ? "vault names need the `myhostname` NSS module or systemd-resolved; install it (Debian/Ubuntu: " +
-              "`sudo apt install libnss-myhostname`) and put `myhostname` before `dns` on the `hosts:` line of /etc/nsswitch.conf"
-            : $"add `127.0.0.1 <vault>.{domain}` to your hosts file for each vault";
+              "`sudo apt install libnss-myhostname`) and put `myhostname` before `dns` on the `hosts:` line of " +
+              $"/etc/nsswitch.conf; or {perVault}"
+            : perVault;
         IPAddress[] addresses;
         try
         {
@@ -114,20 +119,28 @@ public static class DoctorCommand
     private static Finding KeyProtector(KvxOptions options)
     {
         const string check = "key protector";
+        var name = KeyProtectors.Name(options);
         try
         {
             var protector = KeyProtectors.Create(options);
             var probe = RandomNumberGenerator.GetBytes(32);
             return protector.Unwrap(protector.Wrap(probe)).AsSpan().SequenceEqual(probe)
-                ? new(Status.Ok, check, $"{options.KeyProtector} wraps and unwraps a key")
-                : new(Status.Fail, check, $"{options.KeyProtector} unwrapped a different key than it wrapped");
+                ? new(Status.Ok, check, $"{name} wraps and unwraps a key")
+                : new(Status.Fail, check, $"{name} unwrapped a different key than it wrapped");
         }
         catch (KeyProtectorException e)
         {
-            return new(Status.Fail, check, e.Message, options.KeyProtector switch
+            var native = OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() || OperatingSystem.IsLinux();
+            return new(Status.Fail, check, e.Message, name switch
             {
-                "systemd-creds" => $"kvx needs `systemd-creds --user`, from systemd 256 or later; this machine has {SystemdVersion()}",
-                _ => "set Kvx:KeyProtector to systemd-creds",
+                KeyProtectors.SystemdCreds when OperatingSystem.IsLinux() =>
+                    $"kvx needs `systemd-creds --user`, from systemd 256 or later; this machine has {SystemdVersion()}",
+                KeyProtectors.Keychain when OperatingSystem.IsMacOS() =>
+                    "unlock the login keychain (`security unlock-keychain`); a session without one (SSH, CI) must unlock it first",
+                KeyProtectors.Dpapi when OperatingSystem.IsWindows() =>
+                    "DPAPI needs a loaded user profile; a store wrapped before an admin reset of your password cannot be opened again",
+                _ when native => "leave Kvx:KeyProtector empty to use this OS's protector",
+                _ => "this OS has no key protector kvx can use",
             });
         }
     }
