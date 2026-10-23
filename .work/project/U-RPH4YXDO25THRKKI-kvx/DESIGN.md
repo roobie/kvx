@@ -23,7 +23,7 @@ Developers need secrets locally, and the convenient stores keep them in plaintex
 - Storage: the whole store (names, tags, attributes, values) is one AES-GCM sealed file, loaded into memory and atomically replaced on write. This is simpler than per-value encryption and hides names for free. The ergonomic cost is only that the file can't be inspected directly; the CLI covers that.
 
 ## Risks & open questions
-- An app using kvx through `DefaultAzureCredential` gets the kvx token for every Azure resource, because the chain latches the first credential that works. kvx refuses other resources loudly, but such an app cannot also reach real Azure services until per-client wiring exists.
+- An app using kvx through `DefaultAzureCredential` gets every Azure token from kvx. Other resources pass through to the developer's login (D-BGGXSS3A5S3YOP24), so locally the app acts as the developer, not as its managed identity. Access can then differ from production, and kvx must find the developer's CLIs and login when running as a service.
 - Getting IDENTITY_ENDPOINT and IDENTITY_HEADER into an app's environment is manual until a `kvx run`/`kvx env` command or Aspire wiring exists.
 - `*.localhost` resolves to loopback with systemd-resolved and browsers, but not with every glibc setup; may need a hosts entry or a check.
 - Caddy is an extra runtime dependency for a dotnet tool; revisit (Kestrel with its own CA) before packaging.
