@@ -1,5 +1,10 @@
 <Solution>
+  <Folder Name="/samples/">
+    <Project Path="samples/Kvx.Aspire.Sample/AppHost/Kvx.Aspire.Sample.AppHost.csproj" />
+    <Project Path="samples/Kvx.Aspire.Sample/Worker/Kvx.Aspire.Sample.Worker.csproj" />
+  </Folder>
   <Folder Name="/src/">
+    <Project Path="src/Kvx.Aspire.Hosting/Kvx.Aspire.Hosting.csproj" />
     <Project Path="src/Kvx.Server/Kvx.Server.csproj" />
   </Folder>
   <Folder Name="/tests/">

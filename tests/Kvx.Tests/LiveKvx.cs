@@ -45,9 +45,13 @@ public sealed class LiveKvx : IAsyncDisposable
     public static string[] Certificate(string pfx) =>
         [$"--Kestrel:Certificates:Default:Path={pfx}", $"--Kestrel:Certificates:Default:Password={CertPassword}"];
 
+    /// <summary>The certificate this server serves, for a kvx started elsewhere with <see cref="ServerSettings"/>.</summary>
+    public void PrepareCertificate() =>
+        WriteCertificate(CertFile, TrustDir, Domain, DateTimeOffset.UtcNow.AddMinutes(-5), DateTimeOffset.UtcNow.AddDays(30));
+
     public async Task StartAsync()
     {
-        WriteCertificate(CertFile, TrustDir, Domain, DateTimeOffset.UtcNow.AddMinutes(-5), DateTimeOffset.UtcNow.AddDays(30));
+        PrepareCertificate();
         _app = KvxApp.Build(ServerSettings, b => b.Services.AddSingleton(FakeLogin.Upstream));
         await _app.StartAsync();
     }

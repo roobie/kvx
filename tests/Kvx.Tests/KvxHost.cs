@@ -12,8 +12,9 @@ namespace Kvx.Tests;
 /// <summary>
 /// kvx in-process over TestServer, isolated to its own data directory and token file, and to a fake developer
 /// login so no test ever reaches the real az/azd/Visual Studio session.
+/// The factory is keyed by a kvx type rather than Program, which the sample AppHost's entry point also is.
 /// </summary>
-public sealed class KvxHost(TempDir dir, TimeProvider? time = null, Upstream? upstream = null) : WebApplicationFactory<Program>
+public sealed class KvxHost(TempDir dir, TimeProvider? time = null, Upstream? upstream = null) : WebApplicationFactory<Kvx.Server.KvxOptions>
 {
     public string DataDir => Path.Combine(dir.Path, "data");
     public string TokenFile => Path.Combine(dir.Path, "run", "dev-token");

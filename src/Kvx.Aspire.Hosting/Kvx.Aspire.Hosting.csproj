@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+
+    <IsPackable>true</IsPackable>
+    <PackageId>Kvx.Aspire.Hosting</PackageId>
+    <Version>0.1.0</Version>
+    <Description>Runs an Aspire AppHost's Azure Key Vault on kvx, a local Key Vault encrypted at rest, in run mode.</Description>
+    <PackageTags>aspire;integration;hosting;keyvault;secrets</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.Azure.KeyVault" Version="13.6.3" />
+  </ItemGroup>
+
+</Project>

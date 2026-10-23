@@ -195,6 +195,7 @@ public sealed class CliTests : IAsyncLifetime
         var root = json.RootElement;
         Assert.Equal($"{_kvx.Urls}/", root.GetProperty("endpoint").GetString());
         Assert.Equal($"{_kvx.Urls}{IdentityEndpoint.Path}", root.GetProperty("identityEndpoint").GetString());
+        Assert.Equal(LiveKvx.Domain, root.GetProperty("domain").GetString());
         Assert.Equal($"{_kvx.VaultUri("{vault}")}/", root.GetProperty("vaultUriTemplate").GetString());
         Assert.Equal(_kvx.TokenFile, root.GetProperty("tokenFile").GetString());
         Assert.Equal(dir.Path, root.GetProperty("dataDir").GetString());

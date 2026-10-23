@@ -31,6 +31,7 @@ public static class DescribeCommand
             version = typeof(DescribeCommand).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion,
             endpoint = http.ToString(),
             identityEndpoint = new Uri(http, IdentityEndpoint.Path).ToString(),
+            domain = options.Domain,
             vaultUriTemplate = $"https://{{vault}}.{options.Domain}:{https.Port}/",
             tokenFile,
             dataDir = options.ResolveDataDir(),
