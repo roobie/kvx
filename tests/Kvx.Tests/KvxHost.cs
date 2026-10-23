@@ -1,0 +1,46 @@
+using Azure.Core;
+using Azure.Core.Pipeline;
+using Azure.Security.KeyVault.Secrets;
+using Kvx.Server.Auth;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace Kvx.Tests;
+
+/// <summary>kvx in-process over TestServer, isolated to its own data directory and token file.</summary>
+public sealed class KvxHost(TempDir dir) : WebApplicationFactory<Program>
+{
+    public string DataDir => Path.Combine(dir.Path, "data");
+    public string TokenFile => Path.Combine(dir.Path, "run", "dev-token");
+    public string Token => Services.GetRequiredService<DevTokens>().Current;
+
+    protected override void ConfigureWebHost(IWebHostBuilder builder)
+    {
+        builder.UseSetting("Kvx:DataDir", DataDir);
+        builder.UseSetting("Kvx:TokenFile", TokenFile);
+    }
+
+    /// <summary>A stock SecretClient; only the transport is swapped to reach the in-memory server.</summary>
+    public SecretClient SecretClient(string vaultUri, string? token = null) =>
+        new(new Uri(vaultUri), new StaticToken(token ?? Token), new SecretClientOptions
+        {
+            Transport = new HttpClientTransport(CreateClient()),
+            Retry = { MaxRetries = 0 },
+        });
+}
+
+public sealed class StaticToken(string token) : TokenCredential
+{
+    public override AccessToken GetToken(TokenRequestContext context, CancellationToken ct) =>
+        new(token, DateTimeOffset.UtcNow.AddHours(1));
+
+    public override ValueTask<AccessToken> GetTokenAsync(TokenRequestContext context, CancellationToken ct) =>
+        new(GetToken(context, ct));
+}
+
+public sealed class TempDir : IDisposable
+{
+    public string Path { get; } = Directory.CreateTempSubdirectory("kvx-test-").FullName;
+    public void Dispose() => Directory.Delete(Path, recursive: true);
+}

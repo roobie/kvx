@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Kvx.Server/Kvx.Server.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Kvx.Tests/Kvx.Tests.csproj" />
+  </Folder>
+</Solution>

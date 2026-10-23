@@ -1,5 +1,5 @@
 ---
-phase: initialize
+phase: execute
 owner:
   - BR
   - claude
@@ -50,3 +50,4 @@ Initializing: design questions settled (DESIGN.md "Settled"); ready to enter exe
 ## Log
 - 2026-10-23 initialized; .NET chosen after build-vs-buy and Go-vs-.NET discussion
 - 2026-10-23 settled auth (ephemeral dev tokens), host scheme, Caddy TLS, systemd-creds, whole-store encryption
+- 2026-10-23 phase initialize → execute
