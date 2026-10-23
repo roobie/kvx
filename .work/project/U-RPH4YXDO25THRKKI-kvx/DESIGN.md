@@ -26,7 +26,7 @@ Developers need secrets locally, and the convenient stores keep them in plaintex
 ## Risks & open questions
 - An app using kvx through `DefaultAzureCredential` gets every Azure token from kvx. Other resources pass through to the developer's login (D-BGGXSS3A5S3YOP24), so locally the app acts as the developer, not as its managed identity. Access can then differ from production, and kvx must find the developer's CLIs and login when running as a service.
 - `*.localhost` resolves to loopback with systemd-resolved and browsers, but not with every glibc setup; may need a hosts entry or a check.
-- On Linux the dev cert's trust reaches .NET apps only through `SSL_CERT_DIR`. `kvx run`/`kvx env` set it, but an app started any other way fails TLS until the developer sets it too.
+- The dev cert is per user and expires (about a year). An expired or regenerated cert breaks every app until it is trusted again; `kvx doctor` should catch it.
 - Whole-file store: a corrupt or truncated write loses everything, so keep the previous generation. Fine for dev-sized stores (thousands of secrets), not beyond.
 - Machine-bound keys (DPAPI, systemd-creds) make a copied store useless elsewhere. That is intended, but losing the machine loses the secrets; an explicit export/backup path is needed.
 - Keyring prompts (Keychain, some Secret Service setups) can block at startup; the service must tolerate this.

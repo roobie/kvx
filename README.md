@@ -33,7 +33,7 @@ Vaults are served at `https://<vault>.dev.localhost:5381`, with the ASP.NET Core
 The certificate has to exist and be trusted once per machine:
 
 - **Windows, macOS:** Visual Studio and Rider usually do this already; otherwise run `dotnet dev-certs https --trust`.
-- **Linux:** run `dotnet dev-certs https --trust`. It puts the certificate in `~/.aspnet/dev-certs/trust`, which .NET apps only read through `SSL_CERT_DIR`. `kvx run` and `kvx env` set that for the app, so there is nothing else to configure.
+- **Linux:** run `dotnet dev-certs https --trust`. .NET apps then trust it. It warns that OpenSSL needs `SSL_CERT_DIR`; that only matters for non-.NET tools such as curl, and `kvx run` and `kvx env` set it for them.
 
 kvx refuses to start without a certificate. To serve another domain, set `Kvx:Domain` and give Kestrel a certificate for `*.<domain>` under `Kestrel:Certificates:Default`.
 

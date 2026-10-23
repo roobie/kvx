@@ -23,19 +23,20 @@ Out: kvx's own CA or `kvx trust`; changing the dev cert or trusting it on the us
 
 ## Context & constraints
 - The dev cert (verified on this machine) carries `localhost`, `*.dev.localhost`, `*.dev.internal`, 127.0.0.1 and ::1, but not `*.kvx.localhost`. A wildcard directly under `localhost` is not usable, so vaults need a second label, and `dev.localhost` is what the cert offers. The SDK's challenge check only needs the vault host to end with the challenge resource host.
-- Visual Studio, Rider and `dotnet dev-certs https --trust` already trust the dev cert on Windows and macOS. On Linux, `--trust` writes a trust directory that processes only see through SSL_CERT_DIR, so `kvx run` and `kvx env` can supply it.
+- Visual Studio, Rider and `dotnet dev-certs https --trust` already trust the dev cert on Windows and macOS. On Linux, `--trust` also adds it to .NET's per-user Root store (so .NET apps trust it) and writes an OpenSSL trust directory that other tools see only through SSL_CERT_DIR, which `kvx run` and `kvx env` supply.
 - The client commands (run, env, import) and the identity endpoint must keep working without the client trusting anything. Azure's own IDENTITY_ENDPOINT is plain http on loopback, so a loopback http listener stays alongside https.
 - Tests must not need, or change, the machine's dev cert: they configure a generated certificate. A manual smoke run covers the real dev cert after the owner has trusted it.
 - *.localhost resolution depends on NSS (L-NRQPHNQCOYNBPSS7).
 
 ## Now
-Code, tests and README done (36/36). Waiting for BR to trust the dev cert on this machine for the criterion-1 smoke run.
+All criteria shown; finalizing.
 
 ## Next
-- Smoke: installed tool, real dev cert, `kvx run` the sample app with SSL_CERT_* cleared in the caller.
-- Finalize.
+- Harvest, close.
 
 ## Evidence
+- Criterion 1 (smoke, BR's machine after `dotnet dev-certs https --trust`): the freshly packed and installed tool, run from an unrelated directory on its default urls, served SHA-1 38DD…C9BA (SANs include `*.dev.localhost`). With SSL_CERT_* and IDENTITY_* unset and a stray AZURE_CLIENT_SECRET, `kvx run` started the unmodified sample app, which set and read back a secret at `https://smoke.dev.localhost:5381` and read it again through AddAzureKeyVault. The sample's extra Storage-token step failed with kvx's sign-in message, since this machine has no Azure login (expected passthrough behaviour).
+- The same app also worked without SSL_CERT_DIR: `--trust` puts the cert in `~/.dotnet/corefx/cryptography/x509stores/root`, so the SSL_CERT_DIR passthrough is only for non-.NET tools. README, DESIGN and the no-cert message corrected.
 - Spike: started in the Production environment with `--urls=https://…;http://…` and no certificate settings, kvx served this machine's dev cert (SHA-1 38DD…C9BA) and answered with its 401 challenge.
 - Criterion 2: `CliTests.Serve_without_a_certificate_refuses_and_says_how_to_get_one` (a HOME with no dev cert → exit 1, names `dotnet dev-certs https --trust`).
 - Criterion 3: every live test serves `*.kvxtest.localhost` from a generated cert set under `Kestrel:Certificates:Default`; `TlsEndToEndTests` round-trips an unmodified DAC app through `kvx run`, which supplies the cert's trust dir via SSL_CERT_DIR (36/36).
@@ -44,8 +45,8 @@ Code, tests and README done (36/36). Waiting for BR to trust the dev cert on thi
 ## Harvest
 - [ ] decision: serve the ASP.NET Core dev cert from Kestrel, hence the `dev.localhost` domain, over kvx's own CA or a proxy
 - [ ] decision: plain-http loopback listener for the identity endpoint and kvx's commands, https only for vaults
-- [ ] decision: `kvx run`/`kvx env` pass the dev cert's trust dir via SSL_CERT_DIR on Linux, rather than kvx touching the system trust store
 - [ ] learning: Kestrel loads the dev cert for https urls even in Production; with none it throws from ListenOptionsHttpsExtensions.UseHttps
+- [ ] learning: on Linux `dev-certs --trust` makes .NET apps trust the cert via the user Root store; its SSL_CERT_DIR warning concerns only OpenSSL-based tools
 
 ## Log
 - 2026-10-23 initialized

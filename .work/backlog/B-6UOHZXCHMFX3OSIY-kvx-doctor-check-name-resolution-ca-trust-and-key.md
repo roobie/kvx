@@ -9,5 +9,5 @@ kvx works only when three machine-level things are true: vault names resolve to 
 
 ## Notes
 - Name resolution: stock Debian lacks nss-myhostname; suggest the package and the nsswitch line.
-- Cert trust: suggest `dotnet dev-certs https --trust`; on Linux also check that `~/.aspnet/dev-certs/trust` exists, since apps started outside `kvx run`/`kvx env` need it in `SSL_CERT_DIR`.
+- Cert trust: suggest `dotnet dev-certs https --trust` when the dev cert is missing, expired or untrusted (`dotnet dev-certs https --check --trust`).
 - Key protector: systemd-creds version (≥ 256) and a wrap/unwrap probe.

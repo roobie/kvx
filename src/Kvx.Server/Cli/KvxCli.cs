@@ -25,10 +25,9 @@ public static class KvxCli
         }
         catch (InvalidOperationException e) when (e.TargetSite?.DeclaringType?.Name == "ListenOptionsHttpsExtensions")
         {
-            // Kestrel found no certificate; its own advice predates dev-cert trust on Linux.
+            // Kestrel found no certificate, and its own exception reads as a crash.
             return Fail("there is no certificate to serve https with. Create and trust the ASP.NET Core development " +
-                        "certificate with `dotnet dev-certs https --trust`, or configure one under Kestrel:Certificates:Default. " +
-                        "On Linux, start apps with `kvx run` or `kvx env`, which pass the dev cert's trust directory on to them.");
+                        "certificate with `dotnet dev-certs https --trust`, or configure one under Kestrel:Certificates:Default.");
         }
     }
 
