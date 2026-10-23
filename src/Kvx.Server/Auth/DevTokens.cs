@@ -16,13 +16,14 @@ public sealed class DevTokens
     public DevTokens(IOptions<KvxOptions> options)
     {
         var file = options.Value.ResolveTokenFile();
-        Current = ReadExisting(file) ?? Create(file);
+        Current = Read(file) ?? Create(file);
     }
 
     public bool IsValid(ReadOnlySpan<char> presented) =>
         CryptographicOperations.FixedTimeEquals(Encoding.ASCII.GetBytes(presented.ToString()), Encoding.ASCII.GetBytes(Current));
 
-    private static string? ReadExisting(string file)
+    /// <summary>The session token in <paramref name="file"/>, or null when there is none we would accept.</summary>
+    public static string? Read(string file)
     {
         if (!File.Exists(file)) return null;
         var token = File.ReadAllText(file).Trim();

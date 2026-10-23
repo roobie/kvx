@@ -27,6 +27,12 @@ public sealed class KvxOptions
     /// </summary>
     public string Passthrough { get; set; } = "";
 
+    /// <summary>
+    /// Variables `kvx run` and `kvx env` remove from the app's environment, because they would make
+    /// DefaultAzureCredential pick another credential before kvx's managed identity.
+    /// </summary>
+    public string[] RunUnset { get; set; } = [];
+
     public string ResolveDataDir()
     {
         if (!string.IsNullOrEmpty(DataDir)) return DataDir;

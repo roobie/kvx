@@ -12,7 +12,7 @@ public static class KvxApp
 {
     public static WebApplication Build(string[] args, Action<WebApplicationBuilder>? configure = null)
     {
-        var builder = WebApplication.CreateBuilder(args);
+        var builder = WebApplication.CreateBuilder(Options(args));
         configure?.Invoke(builder);
 
         builder.Services.AddOptions<KvxOptions>()
@@ -42,4 +42,15 @@ public static class KvxApp
         app.MapSecrets();
         return app;
     }
+
+    /// <summary>
+    /// Configuration is found next to the binary, not in the working directory: a dotnet tool runs from wherever
+    /// the developer happens to be. The client commands use the same options, so they read the same settings.
+    /// </summary>
+    public static WebApplicationOptions Options(string[] args) =>
+        new() { Args = args, ContentRootPath = AppContext.BaseDirectory };
+
+    /// <summary>kvx's configuration without starting anything; for the client commands.</summary>
+    public static IConfiguration Configuration(string[] args) =>
+        WebApplication.CreateBuilder(Options(args)).Configuration;
 }

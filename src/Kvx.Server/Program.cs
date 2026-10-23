@@ -1,5 +1,5 @@
-using Kvx.Server;
+using Kvx.Server.Cli;
 
-KvxApp.Build(args).Run();
+return await KvxCli.Dispatch(args);
 
 public partial class Program;
