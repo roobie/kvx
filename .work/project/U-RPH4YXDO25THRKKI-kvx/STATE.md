@@ -29,14 +29,15 @@ Out (for now): the keys and certificates APIs; multi-user or networked deploymen
 - Same-user scope means the service runs per user, on loopback.
 
 ## Now
-The secrets API is complete on Linux: walking skeleton and conformance milestones delivered. Choosing the next milestone.
+The secrets API is complete on Linux, and unmodified DefaultAzureCredential apps can use it. Choosing the next milestone.
 
 ## Next
-- Candidates: DefaultAzureCredential support (how real apps get a token without code changes), the Windows/macOS key protectors (criterion 3), `kvx doctor`, and dotnet tool packaging with user-secrets import (criterion 5).
+- Candidates: the Windows/macOS key protectors (criterion 3), dotnet tool packaging with user-secrets import (criterion 5) together with `kvx run`/`kvx env` (B-UW2PA4KWMLEWUDVQ), and `kvx doctor`.
 
 ## Evidence
 - Walking skeleton (U-MTGVCUWN5POPRG5D), 2026-10-23: an unmodified app process sets and gets secrets via Caddy at https://test.kvx.localhost; the data dir holds no plaintext name or value (partial evidence for criteria 1 and 2).
 - Secrets conformance (U-LVSM4WJS6GP7YORS), 2026-10-23: a stock SecretClient passes tests for every operation in criterion 1 (17/17 total). The no-plaintext scan now covers the full lifecycle and backup blobs (criterion 2). Error-case fidelity against a real vault is unconfirmed (B-MDJXFAWWOZWP6FIO).
+- DefaultAzureCredential (U-VLRFD3QF7OBYKRKF), 2026-10-23: an app whose only credential code is `new DefaultAzureCredential()` round-trips through Caddy, configured by two environment variables. Tokens survive kvx restarts within the login session (22/22 tests).
 
 ## Harvest
 - [ ] decision: pure .NET over Go (audience, DPAPI, Aspire; distribution recoverable by packaging)
