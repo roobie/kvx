@@ -33,6 +33,12 @@ public sealed class KvxOptions
     /// </summary>
     public string[] RunUnset { get; set; } = [];
 
+    /// <summary>
+    /// Linux only: where `dotnet dev-certs https --trust` puts the dev cert for OpenSSL. Processes trust it only
+    /// through SSL_CERT_DIR, so `kvx run` and `kvx env` add it. Empty means $HOME/.aspnet/dev-certs/trust.
+    /// </summary>
+    public string DevCertTrustDir { get; set; } = "";
+
     public string ResolveDataDir()
     {
         if (!string.IsNullOrEmpty(DataDir)) return DataDir;
@@ -42,6 +48,11 @@ public sealed class KvxOptions
             : xdg;
         return Path.Combine(root, "kvx");
     }
+
+    public string ResolveDevCertTrustDir() =>
+        !string.IsNullOrEmpty(DevCertTrustDir)
+            ? DevCertTrustDir
+            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".aspnet", "dev-certs", "trust");
 
     public string ResolveTokenFile()
     {

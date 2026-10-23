@@ -6,7 +6,7 @@ namespace Kvx.Tests;
 
 public sealed class SecretsTests : IDisposable
 {
-    private const string Vault = "https://test.kvx.localhost";
+    private const string Vault = "https://test.dev.localhost";
     private readonly TempDir _dir = new();
 
     public void Dispose() => _dir.Dispose();
@@ -64,15 +64,15 @@ public sealed class SecretsTests : IDisposable
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         var challenge = response.Headers.WwwAuthenticate.ToString();
-        Assert.Contains("resource=\"https://kvx.localhost\"", challenge);
-        Assert.Contains("authorization=\"https://login.kvx.localhost/kvx\"", challenge);
+        Assert.Contains("resource=\"https://dev.localhost\"", challenge);
+        Assert.Contains("authorization=\"https://login.dev.localhost/kvx\"", challenge);
     }
 
     [Fact]
     public async Task Sdk_verifies_challenge_resource_against_vault_host()
     {
         // A host outside the challenge resource's domain must be refused by the SDK itself,
-        // which proves the verification runs (and therefore passes) for *.kvx.localhost.
+        // which proves the verification runs (and therefore passes) for *.dev.localhost.
         using var host = new KvxHost(_dir);
         var e = await Assert.ThrowsAsync<InvalidOperationException>(
             () => host.SecretClient("https://test.elsewhere.localhost").GetSecretAsync("s"));

@@ -9,7 +9,7 @@ namespace Kvx.Tests;
 /// <summary>The secrets API beyond set/get, driven only through a stock SecretClient.</summary>
 public sealed class ConformanceTests : IDisposable
 {
-    private const string Vault = "https://test.kvx.localhost";
+    private const string Vault = "https://test.dev.localhost";
     private readonly TempDir _dir = new();
     private readonly FakeTimeProvider _time = new(DateTimeOffset.UtcNow);
 

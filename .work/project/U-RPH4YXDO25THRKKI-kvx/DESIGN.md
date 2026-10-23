@@ -17,8 +17,8 @@ Developers need secrets locally, and the convenient stores keep them in plaintex
 ## Settled (2026-10-23, with BR)
 - Auth, for now: one random dev token per login session, kept in `$XDG_RUNTIME_DIR` so it survives kvx restarts but not logout or reboot (BR, 2026-10-23). Restarts must not break running apps, which cache tokens in memory. Real Entra validation can come later.
 - Apps authenticate with an unmodified `DefaultAzureCredential`: kvx speaks the App Service managed-identity protocol, and the dev token doubles as IDENTITY_HEADER.
-- Host name: look real without `DisableChallengeResourceVerification`. The SDK only checks that the request host ends with the challenge resource's host, so kvx answers with resource `https://kvx.localhost` and vaults live at `https://<vault>.kvx.localhost`. No azure.net names are hijacked and no SDK option is needed.
-- TLS: Caddy reverse proxy with `tls internal` (its own CA, trusted via `caddy trust`) for development.
+- Host name: look real without `DisableChallengeResourceVerification`. The SDK only checks that the request host ends with the challenge resource's host, so kvx answers with resource `https://dev.localhost` and vaults live at `https://<vault>.dev.localhost`. No azure.net names are hijacked and no SDK option is needed.
+- TLS: Kestrel serves the ASP.NET Core dev cert, which .NET developers already have and trust and which covers `*.dev.localhost`; that is why the domain is `dev.localhost`. A configured certificate replaces it for another domain. The identity endpoint and kvx's own commands use a plain-http loopback listener, as Azure's identity endpoint does.
 - Headless Linux: `systemd-creds --user` wraps the data key. It needs no UX, works unprivileged (verified on systemd 257) and uses TPM2 when present. A passphrase/agent fallback waits until someone needs it.
 - Storage: the whole store (names, tags, attributes, values) is one AES-GCM sealed file, loaded into memory and atomically replaced on write. This is simpler than per-value encryption and hides names for free. The ergonomic cost is only that the file can't be inspected directly; the CLI covers that.
 - One `kvx` tool. Its helper commands (run, env, import) are clients of the serving kvx and never open the store (D-L4OU7YMFJ6W6OENA). `kvx run` removes the credential variables that would outrank kvx (D-IJMXLBG5U3LFTH62).
@@ -26,7 +26,7 @@ Developers need secrets locally, and the convenient stores keep them in plaintex
 ## Risks & open questions
 - An app using kvx through `DefaultAzureCredential` gets every Azure token from kvx. Other resources pass through to the developer's login (D-BGGXSS3A5S3YOP24), so locally the app acts as the developer, not as its managed identity. Access can then differ from production, and kvx must find the developer's CLIs and login when running as a service.
 - `*.localhost` resolves to loopback with systemd-resolved and browsers, but not with every glibc setup; may need a hosts entry or a check.
-- Caddy is an extra runtime dependency for the dotnet tool, which is packaged now; Kestrel with its own CA would remove it.
+- On Linux the dev cert's trust reaches .NET apps only through `SSL_CERT_DIR`. `kvx run`/`kvx env` set it, but an app started any other way fails TLS until the developer sets it too.
 - Whole-file store: a corrupt or truncated write loses everything, so keep the previous generation. Fine for dev-sized stores (thousands of secrets), not beyond.
 - Machine-bound keys (DPAPI, systemd-creds) make a copied store useless elsewhere. That is intended, but losing the machine loses the secrets; an explicit export/backup path is needed.
 - Keyring prompts (Keychain, some Secret Service setups) can block at startup; the service must tolerate this.

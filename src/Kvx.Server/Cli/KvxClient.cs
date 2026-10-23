@@ -28,7 +28,7 @@ public sealed class KvxClient
         config.GetSection("Kvx").Bind(options);
         var endpoint = ListenEndpoint(config["urls"]);
         if (endpoint is null)
-            return (null, $"cannot tell where kvx listens from urls '{config["urls"]}'.");
+            return (null, $"urls '{config["urls"]}' has no http:// listener for kvx's identity endpoint and commands.");
 
         string file;
         try { file = options.ResolveTokenFile(); }
@@ -56,22 +56,38 @@ public sealed class KvxClient
         }
     }
 
-    /// <summary>The first listen URL, with a wildcard host made reachable as loopback.</summary>
+    /// <summary>
+    /// The first plain-http listen URL, with a wildcard host made reachable as loopback. Clients and the identity
+    /// endpoint use it so that nothing but the app's vault calls depends on certificate trust, as in Azure, where
+    /// IDENTITY_ENDPOINT is plain http too.
+    /// </summary>
     internal static Uri? ListenEndpoint(string? urls)
     {
-        var first = urls?.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).FirstOrDefault();
+        var first = urls?.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .FirstOrDefault(u => u.StartsWith("http://", StringComparison.OrdinalIgnoreCase));
         if (first is null) return null;
         foreach (var wildcard in new[] { "://*:", "://+:", "://0.0.0.0:", "://[::]:" })
             first = first.Replace(wildcard, "://127.0.0.1:");
         return Uri.TryCreate(first, UriKind.Absolute, out var uri) ? new Uri(uri.GetLeftPart(UriPartial.Authority) + "/") : null;
     }
 
-    /// <summary>The variables an app needs to use kvx as its managed identity.</summary>
-    public IReadOnlyDictionary<string, string> IdentityVariables() => new Dictionary<string, string>
+    /// <summary>
+    /// The variables an app needs to use kvx as its managed identity and, on Linux, to trust the dev cert
+    /// kvx serves vaults with.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> AppVariables()
     {
-        ["IDENTITY_ENDPOINT"] = IdentityEndpoint,
-        ["IDENTITY_HEADER"] = Token,
-    };
+        var variables = new Dictionary<string, string>
+        {
+            ["IDENTITY_ENDPOINT"] = IdentityEndpoint,
+            ["IDENTITY_HEADER"] = Token,
+        };
+        var trust = Options.ResolveDevCertTrustDir();
+        var current = Environment.GetEnvironmentVariable("SSL_CERT_DIR");
+        if (OperatingSystem.IsLinux() && Directory.Exists(trust) && current?.Split(':').Contains(trust) != true)
+            variables["SSL_CERT_DIR"] = string.IsNullOrEmpty(current) ? trust : $"{trust}:{current}";
+        return variables;
+    }
 
     public AuthenticationHeaderValue Bearer => new("Bearer", Token);
 }

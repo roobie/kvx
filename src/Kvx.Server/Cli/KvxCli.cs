@@ -18,8 +18,18 @@ public static class KvxCli
             case "help" or "--help" or "-h": Console.Out.Write(Usage); return 0;
             case "serve": args = rest; break;
         }
-        await KvxApp.Build(args).RunAsync();
-        return 0;
+        try
+        {
+            await KvxApp.Build(args).RunAsync();
+            return 0;
+        }
+        catch (InvalidOperationException e) when (e.TargetSite?.DeclaringType?.Name == "ListenOptionsHttpsExtensions")
+        {
+            // Kestrel found no certificate; its own advice predates dev-cert trust on Linux.
+            return Fail("there is no certificate to serve https with. Create and trust the ASP.NET Core development " +
+                        "certificate with `dotnet dev-certs https --trust`, or configure one under Kestrel:Certificates:Default. " +
+                        "On Linux, start apps with `kvx run` or `kvx env`, which pass the dev cert's trust directory on to them.");
+        }
     }
 
     internal static int Fail(string message)

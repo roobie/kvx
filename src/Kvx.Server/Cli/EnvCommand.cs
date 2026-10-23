@@ -25,7 +25,7 @@ public static class EnvCommand
         foreach (var name in client.Options.RunUnset)
             if (Environment.GetEnvironmentVariable(name) is not null)
                 Console.Out.WriteLine(syntax.Unset(name));
-        foreach (var (name, value) in client.IdentityVariables())
+        foreach (var (name, value) in client.AppVariables())
             Console.Out.WriteLine(syntax.Export(name, value));
         return 0;
     }

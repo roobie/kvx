@@ -4,7 +4,7 @@ read_if:
   - kvx vault names do not resolve
   - setting up a dev machine or CI runner for kvx
 refs:
-  - tests/Kvx.Tests/CaddyEndToEndTests.cs#Unmodified_app_round_trips_through_caddy
+  - tests/Kvx.Tests/TlsEndToEndTests.cs#Unmodified_app_round_trips_over_kvx_tls
 ---
 
 # L-NRQPHNQCOYNBPSS7 *.localhost resolution depends on the host's NSS setup

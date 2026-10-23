@@ -10,8 +10,8 @@ namespace Kvx.Server.Cli;
 /// <summary>
 /// `kvx import --vault v [--project dir | --id id | --file path] [--remove-plaintext] [overrides]`:
 /// moves plaintext user-secrets into a vault under the names the Key Vault configuration provider maps back
-/// (`--` ↔ `:`), so the app reads the same keys. It goes through the serving kvx over its loopback listener,
-/// naming the vault in the Host header, so it needs neither Caddy nor TLS trust and is still authenticated.
+/// (`--` ↔ `:`), so the app reads the same keys. It goes through the serving kvx over its plain-http loopback
+/// listener, naming the vault in the Host header, so it needs no certificate trust and is still authenticated.
 /// </summary>
 public static partial class ImportCommand
 {

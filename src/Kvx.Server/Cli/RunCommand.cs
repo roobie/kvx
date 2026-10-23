@@ -26,7 +26,7 @@ public static class RunCommand
         foreach (var name in client.Options.RunUnset)
             if (start.Environment.Remove(name))
                 Console.Error.WriteLine($"kvx: unset {name} for this app, so DefaultAzureCredential uses kvx");
-        foreach (var (name, value) in client.IdentityVariables()) start.Environment[name] = value;
+        foreach (var (name, value) in client.AppVariables()) start.Environment[name] = value;
 
         // The terminal delivers Ctrl-C to the whole process group; let the app decide, and report its exit code.
         Console.CancelKeyPress += (_, e) => e.Cancel = true;

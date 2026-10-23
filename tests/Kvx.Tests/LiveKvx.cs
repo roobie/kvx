@@ -1,31 +1,51 @@
 using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using Kvx.Server;
-using Kvx.Server.Auth;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Kvx.Tests;
 
-/// <summary>kvx serving on a real loopback port, plus a way to run the kvx binary's client commands against it.</summary>
+/// <summary>
+/// kvx serving https and http on real loopback ports, plus a way to run the kvx binary's client commands against it.
+/// It serves its own certificate for its own domain, so tests neither need nor touch the machine's dev cert,
+/// and that certificate sits in the trust directory `kvx run` passes on, as `dotnet dev-certs https --trust` would.
+/// </summary>
 public sealed class LiveKvx : IAsyncDisposable
 {
+    public const string Domain = "kvxtest.localhost";
+
     public TempDir Dir { get; } = new();
     public int Port { get; } = FreePort();
+    public int HttpsPort { get; } = FreePort();
     public string TokenFile => Path.Combine(Dir.Path, "run", "dev-token");
     public string Urls => $"http://127.0.0.1:{Port}";
+    public string TrustDir => Path.Combine(Dir.Path, "trust");
+    private string CertFile => Path.Combine(Dir.Path, "kvx.pfx");
 
-    /// <summary>The settings a client command needs to find this server.</summary>
-    public string[] ClientSettings => [$"--urls={Urls}", $"--Kvx:TokenFile={TokenFile}"];
+    /// <summary>The settings a client command needs to find this server and pass its trust on.</summary>
+    public string[] ClientSettings =>
+    [
+        $"--urls=https://127.0.0.1:{HttpsPort};{Urls}",
+        $"--Kvx:TokenFile={TokenFile}",
+        $"--Kvx:Domain={Domain}",
+        $"--Kvx:DevCertTrustDir={TrustDir}",
+    ];
+
+    public string VaultUri(string vault) => $"https://{vault}.{Domain}:{HttpsPort}";
 
     private Microsoft.AspNetCore.Builder.WebApplication? _app;
 
     public async Task StartAsync()
     {
+        WriteCertificate();
         _app = KvxApp.Build([
-            $"--urls={Urls}",
+            .. ClientSettings,
             $"--Kvx:DataDir={Path.Combine(Dir.Path, "data")}",
-            $"--Kvx:TokenFile={TokenFile}",
+            $"--Kestrel:Certificates:Default:Path={CertFile}",
+            "--Kestrel:Certificates:Default:Password=test",
         ], b => b.Services.AddSingleton(FakeLogin.Upstream));
         await _app.StartAsync();
     }
@@ -34,6 +54,23 @@ public sealed class LiveKvx : IAsyncDisposable
     {
         if (_app is not null) await _app.DisposeAsync();
         Dir.Dispose();
+    }
+
+    private void WriteCertificate()
+    {
+        using var key = RSA.Create(2048);
+        var request = new CertificateRequest($"CN={Domain}", key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        var names = new SubjectAlternativeNameBuilder();
+        names.AddDnsName($"*.{Domain}");
+        names.AddIpAddress(IPAddress.Loopback);
+        request.CertificateExtensions.Add(names.Build());
+        request.CertificateExtensions.Add(new X509BasicConstraintsExtension(false, false, 0, true));
+        request.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension([new Oid("1.3.6.1.5.5.7.3.1")], false));
+        using var cert = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddMinutes(-5), DateTimeOffset.UtcNow.AddDays(1));
+
+        File.WriteAllBytes(CertFile, cert.Export(X509ContentType.Pfx, "test"));
+        Directory.CreateDirectory(TrustDir);
+        File.WriteAllText(Path.Combine(TrustDir, "kvxtest.pem"), cert.ExportCertificatePem());
     }
 
     /// <summary>Runs `kvx args…` as its own process, the way a developer does.</summary>

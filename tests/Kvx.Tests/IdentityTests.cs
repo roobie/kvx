@@ -10,7 +10,7 @@ public sealed class IdentityTests : IDisposable
     private readonly TempDir _dir = new();
     public void Dispose() => _dir.Dispose();
 
-    private static HttpRequestMessage TokenRequest(string? header, string resource = "https://kvx.localhost")
+    private static HttpRequestMessage TokenRequest(string? header, string resource = "https://dev.localhost")
     {
         var request = new HttpRequestMessage(HttpMethod.Get,
             $"{IdentityEndpoint.Path}?api-version=2019-08-01&resource={Uri.EscapeDataString(resource)}");
@@ -28,7 +28,7 @@ public sealed class IdentityTests : IDisposable
         using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.Equal(kvx.Token, body.RootElement.GetProperty("access_token").GetString());
         Assert.Equal("Bearer", body.RootElement.GetProperty("token_type").GetString());
-        Assert.Equal("https://kvx.localhost", body.RootElement.GetProperty("resource").GetString());
+        Assert.Equal("https://dev.localhost", body.RootElement.GetProperty("resource").GetString());
         var expiresOn = DateTimeOffset.FromUnixTimeSeconds(body.RootElement.GetProperty("expires_on").GetInt64());
         Assert.True(expiresOn > DateTimeOffset.UtcNow.AddHours(2), "a lifetime over 2h makes MSAL refresh at half-life instead of hammering");
     }
@@ -107,7 +107,7 @@ public sealed class IdentityTests : IDisposable
         using (var restarted = new KvxHost(_dir))
         {
             Assert.Equal(first, restarted.Token);
-            var ok = await restarted.SecretClient("https://v.kvx.localhost", first).SetSecretAsync("s", "v");
+            var ok = await restarted.SecretClient("https://v.dev.localhost", first).SetSecretAsync("s", "v");
             Assert.Equal("v", ok.Value.Value);
         }
 
@@ -115,7 +115,7 @@ public sealed class IdentityTests : IDisposable
         using var newSession = new KvxHost(_dir);
         Assert.NotEqual(first, newSession.Token);
         var rejected = await Assert.ThrowsAsync<Azure.RequestFailedException>(() =>
-            newSession.SecretClient("https://v.kvx.localhost", first).GetSecretAsync("s"));
+            newSession.SecretClient("https://v.dev.localhost", first).GetSecretAsync("s"));
         Assert.Equal(401, rejected.Status);
     }
 }

@@ -15,11 +15,16 @@ public sealed class CliTests : IAsyncLifetime
     public async Task Run_sets_the_identity_and_removes_credentials_that_would_win()
     {
         var result = await LiveKvx.Cli(["run", .. _kvx.ClientSettings, "--", "sh", "-c",
-            "echo \"$IDENTITY_ENDPOINT|$IDENTITY_HEADER|${AZURE_CLIENT_SECRET-unset}\""],
-            psi => psi.Environment["AZURE_CLIENT_SECRET"] = "a-service-principal-secret");
+            "echo \"$IDENTITY_ENDPOINT|$IDENTITY_HEADER|${AZURE_CLIENT_SECRET-unset}|$SSL_CERT_DIR\""],
+            psi =>
+            {
+                psi.Environment["AZURE_CLIENT_SECRET"] = "a-service-principal-secret";
+                psi.Environment["SSL_CERT_DIR"] = "/etc/ssl/certs";
+            });
 
         Assert.True(result.ExitCode == 0, result.ToString());
-        Assert.Equal($"{_kvx.Urls}{IdentityEndpoint.Path}|{File.ReadAllText(_kvx.TokenFile).Trim()}|unset", result.Stdout.Trim());
+        Assert.Equal($"{_kvx.Urls}{IdentityEndpoint.Path}|{File.ReadAllText(_kvx.TokenFile).Trim()}|unset|{_kvx.TrustDir}:/etc/ssl/certs",
+            result.Stdout.Trim());
         Assert.Contains("unset AZURE_CLIENT_SECRET", result.Stderr);
     }
 
@@ -107,6 +112,20 @@ public sealed class CliTests : IAsyncLifetime
         Assert.True(second.ExitCode == 0, second.ToString());
         Assert.Contains("1 imported, 1 already in vault", second.Stdout);
         Assert.False(File.Exists(file));
+    }
+
+    [Fact]
+    public async Task Serve_without_a_certificate_refuses_and_says_how_to_get_one()
+    {
+        using var home = new TempDir();   // a user with no dev cert
+        var result = await LiveKvx.Cli([
+            $"--urls=https://127.0.0.1:{LiveKvx.FreePort()};http://127.0.0.1:{LiveKvx.FreePort()}",
+            $"--Kvx:DataDir={Path.Combine(home.Path, "data")}",
+            $"--Kvx:TokenFile={Path.Combine(home.Path, "run", "dev-token")}",
+        ], psi => { psi.Environment["HOME"] = home.Path; psi.Environment["DOTNET_CLI_HOME"] = home.Path; });
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Contains("dotnet dev-certs https --trust", result.Stderr);
     }
 
     private static bool OnPath(string command) =>
