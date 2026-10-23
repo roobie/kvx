@@ -34,7 +34,9 @@ public static class KvxApp
         // Fail at startup, not on the first request, when the key or store is unusable.
         app.Services.GetRequiredService<SecretRepository>();
 
+        app.UseRouting();   // so the auth middleware can see which endpoint was matched
         app.UseChallengeAuth();
+        app.MapIdentity();
         app.MapSecrets();
         return app;
     }

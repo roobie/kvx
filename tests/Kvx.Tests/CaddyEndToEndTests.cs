@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text.Json;
 using Kvx.Server;
+using Kvx.Server.Auth;
 
 namespace Kvx.Tests;
 
@@ -65,8 +66,16 @@ public sealed class CaddyEndToEndTests : IAsyncLifetime
 
         // SSL_CERT_FILE makes this run's Caddy CA the trust root for the child, as `caddy trust` would.
         var psi = Redirected("dotnet", Path.Combine(AppContext.BaseDirectory, "Kvx.SampleApp.dll"),
-            vault, TokenFile, "conn-string", "Server=db;Password=hunter2");
+            vault, "conn-string", "Server=db;Password=hunter2");
         psi.Environment["SSL_CERT_FILE"] = await CaddyRoot();
+
+        // The developer's shell may carry credentials that DefaultAzureCredential would try first.
+        foreach (var key in psi.Environment.Keys.ToList())
+            if (key.StartsWith("AZURE_") || key.StartsWith("IDENTITY_") || key.StartsWith("MSI_") || key == "IMDS_ENDPOINT")
+                psi.Environment.Remove(key);
+        // All the app is told: where kvx's identity endpoint is, and this login session's token.
+        psi.Environment["IDENTITY_ENDPOINT"] = $"http://127.0.0.1:{_kvxPort}{IdentityEndpoint.Path}";
+        psi.Environment["IDENTITY_HEADER"] = File.ReadAllText(TokenFile).Trim();
 
         using var app = Process.Start(psi)!;
         var stdout = app.StandardOutput.ReadToEndAsync();

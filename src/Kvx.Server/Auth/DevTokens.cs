@@ -5,38 +5,37 @@ using Microsoft.Extensions.Options;
 namespace Kvx.Server.Auth;
 
 /// <summary>
-/// One random bearer token per process. It is written to a per-user runtime file so local
-/// tooling can pick it up, and it dies with the process.
+/// One random bearer token per login session. It lives in a per-user runtime file (cleared at logout
+/// and reboot) and is reused when kvx restarts, because apps cache it in memory for as long as they run.
+/// The same value is the IDENTITY_HEADER apps present to the identity endpoint.
 /// </summary>
 public sealed class DevTokens
 {
-    private readonly string _file;
-
     public string Current { get; }
 
-    public DevTokens(IOptions<KvxOptions> options, IHostApplicationLifetime lifetime)
+    public DevTokens(IOptions<KvxOptions> options)
     {
-        Current = Base64Url(RandomNumberGenerator.GetBytes(32));
-        _file = options.Value.ResolveTokenFile();
-
-        PrivateFiles.CreateDirectory(Path.GetDirectoryName(_file)!);
-        PrivateFiles.Write(_file, Encoding.ASCII.GetBytes(Current));
-
-        lifetime.ApplicationStopping.Register(RemoveFileIfOurs);
+        var file = options.Value.ResolveTokenFile();
+        Current = ReadExisting(file) ?? Create(file);
     }
 
     public bool IsValid(ReadOnlySpan<char> presented) =>
         CryptographicOperations.FixedTimeEquals(Encoding.ASCII.GetBytes(presented.ToString()), Encoding.ASCII.GetBytes(Current));
 
-    private void RemoveFileIfOurs()
+    private static string? ReadExisting(string file)
     {
-        try
-        {
-            if (File.Exists(_file) && File.ReadAllText(_file) == Current) File.Delete(_file);
-        }
-        catch (IOException) { /* best effort; the token is useless once we stop anyway */ }
+        if (!File.Exists(file)) return null;
+        var token = File.ReadAllText(file).Trim();
+        // Anything else is not ours to trust (truncated write, hand edit); replace it.
+        return token.Length == 43 && token.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_') ? token : null;
     }
 
-    private static string Base64Url(byte[] bytes) =>
-        Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+    private static string Create(string file)
+    {
+        var token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        PrivateFiles.CreateDirectory(Path.GetDirectoryName(file)!);
+        PrivateFiles.Write(file + ".tmp", Encoding.ASCII.GetBytes(token));
+        File.Move(file + ".tmp", file, overwrite: true);
+        return token;
+    }
 }

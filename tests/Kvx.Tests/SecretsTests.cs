@@ -57,22 +57,6 @@ public sealed class SecretsTests : IDisposable
     }
 
     [Fact]
-    public async Task Token_from_a_previous_run_is_rejected()
-    {
-        string stale;
-        using (var first = new KvxHost(_dir))
-        {
-            stale = first.Token;
-            await first.SecretClient(Vault).SetSecretAsync("s", "v");
-        }
-
-        using var second = new KvxHost(_dir);
-        var e = await Assert.ThrowsAsync<RequestFailedException>(
-            () => second.SecretClient(Vault, token: stale).GetSecretAsync("s"));
-        Assert.Equal(401, e.Status);
-    }
-
-    [Fact]
     public async Task Request_without_token_gets_key_vault_challenge()
     {
         using var host = new KvxHost(_dir);

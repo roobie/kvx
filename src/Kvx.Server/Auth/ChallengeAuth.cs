@@ -17,6 +17,12 @@ public static class ChallengeAuth
 
         return app.Use(async (context, next) =>
         {
+            if (context.GetEndpoint()?.Metadata.GetMetadata<Microsoft.AspNetCore.Authorization.IAllowAnonymous>() is not null)
+            {
+                await next(context);
+                return;
+            }
+
             var header = context.Request.Headers.Authorization.ToString();
             if (header.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase) && tokens.IsValid(header.AsSpan(7)))
             {

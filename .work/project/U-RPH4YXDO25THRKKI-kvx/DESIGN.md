@@ -15,14 +15,16 @@ Developers need secrets locally, and the convenient stores keep them in plaintex
 - Not wire-compatible (sops+age, a custom config provider): solves encryption, but dev and prod code diverge.
 
 ## Settled (2026-10-23, with BR)
-- Auth, for now: ephemeral dev tokens. The signing key is regenerated on every kvx start, so tokens never outlive the process. This keeps development unblocked; real Entra validation can come later.
+- Auth, for now: one random dev token per login session, kept in `$XDG_RUNTIME_DIR` so it survives kvx restarts but not logout or reboot (BR, 2026-10-23). Restarts must not break running apps, which cache tokens in memory. Real Entra validation can come later.
+- Apps authenticate with an unmodified `DefaultAzureCredential`: kvx speaks the App Service managed-identity protocol, and the dev token doubles as IDENTITY_HEADER.
 - Host name: look real without `DisableChallengeResourceVerification`. The SDK only checks that the request host ends with the challenge resource's host, so kvx answers with resource `https://kvx.localhost` and vaults live at `https://<vault>.kvx.localhost`. No azure.net names are hijacked and no SDK option is needed.
 - TLS: Caddy reverse proxy with `tls internal` (its own CA, trusted via `caddy trust`) for development.
 - Headless Linux: `systemd-creds --user` wraps the data key. It needs no UX, works unprivileged (verified on systemd 257) and uses TPM2 when present. A passphrase/agent fallback waits until someone needs it.
 - Storage: the whole store (names, tags, attributes, values) is one AES-GCM sealed file, loaded into memory and atomically replaced on write. This is simpler than per-value encryption and hides names for free. The ergonomic cost is only that the file can't be inspected directly; the CLI covers that.
 
 ## Risks & open questions
-- How a client obtains a dev token: tests can use a static credential; apps using `DefaultAzureCredential` need a path (a managed-identity-style endpoint via `IDENTITY_ENDPOINT` is the candidate). It would also catch token requests for other Azure resources.
+- An app using kvx through `DefaultAzureCredential` gets the kvx token for every Azure resource, because the chain latches the first credential that works. kvx refuses other resources loudly, but such an app cannot also reach real Azure services until per-client wiring exists.
+- Getting IDENTITY_ENDPOINT and IDENTITY_HEADER into an app's environment is manual until a `kvx run`/`kvx env` command or Aspire wiring exists.
 - `*.localhost` resolves to loopback with systemd-resolved and browsers, but not with every glibc setup; may need a hosts entry or a check.
 - Caddy is an extra runtime dependency for a dotnet tool; revisit (Kestrel with its own CA) before packaging.
 - Whole-file store: a corrupt or truncated write loses everything, so keep the previous generation. Fine for dev-sized stores (thousands of secrets), not beyond.
