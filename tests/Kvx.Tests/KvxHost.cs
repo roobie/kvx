@@ -3,13 +3,14 @@ using Azure.Core.Pipeline;
 using Azure.Security.KeyVault.Secrets;
 using Kvx.Server.Auth;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Kvx.Tests;
 
 /// <summary>kvx in-process over TestServer, isolated to its own data directory and token file.</summary>
-public sealed class KvxHost(TempDir dir) : WebApplicationFactory<Program>
+public sealed class KvxHost(TempDir dir, TimeProvider? time = null) : WebApplicationFactory<Program>
 {
     public string DataDir => Path.Combine(dir.Path, "data");
     public string TokenFile => Path.Combine(dir.Path, "run", "dev-token");
@@ -19,6 +20,7 @@ public sealed class KvxHost(TempDir dir) : WebApplicationFactory<Program>
     {
         builder.UseSetting("Kvx:DataDir", DataDir);
         builder.UseSetting("Kvx:TokenFile", TokenFile);
+        if (time is not null) builder.ConfigureTestServices(s => s.AddSingleton(time));
     }
 
     /// <summary>A stock SecretClient; only the transport is swapped to reach the in-memory server.</summary>

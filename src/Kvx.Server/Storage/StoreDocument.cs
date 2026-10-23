@@ -17,6 +17,10 @@ public sealed class VaultDocument
 {
     [JsonObjectCreationHandling(JsonObjectCreationHandling.Populate)]
     public Dictionary<string, SecretDocument> Secrets { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    // Kept apart from live secrets: a name is in exactly one of the two, and live lookups stay oblivious.
+    [JsonObjectCreationHandling(JsonObjectCreationHandling.Populate)]
+    public Dictionary<string, DeletedSecretDocument> Deleted { get; } = new(StringComparer.OrdinalIgnoreCase);
 }
 
 public sealed class SecretDocument
@@ -25,15 +29,18 @@ public sealed class SecretDocument
     public List<SecretVersion> Versions { get; set; } = [];
 }
 
-public sealed class SecretVersion
+public sealed record DeletedSecretDocument(SecretDocument Secret, long DeletedDate, long ScheduledPurgeDate);
+
+/// <summary>Immutable, so readers can hold one outside the repository lock; updates replace it.</summary>
+public sealed record SecretVersion
 {
-    public required string Version { get; set; }
-    public required string Value { get; set; }
-    public string? ContentType { get; set; }
-    public Dictionary<string, string>? Tags { get; set; }
-    public bool Enabled { get; set; } = true;
-    public long? NotBefore { get; set; }
-    public long? Expires { get; set; }
-    public long Created { get; set; }
-    public long Updated { get; set; }
+    public required string Version { get; init; }
+    public required string Value { get; init; }
+    public string? ContentType { get; init; }
+    public Dictionary<string, string>? Tags { get; init; }
+    public bool Enabled { get; init; } = true;
+    public long? NotBefore { get; init; }
+    public long? Expires { get; init; }
+    public long Created { get; init; }
+    public long Updated { get; init; }
 }

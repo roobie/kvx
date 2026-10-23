@@ -9,7 +9,9 @@ namespace Kvx.Server.Storage;
 /// </summary>
 public sealed class SealedStore
 {
-    private static readonly byte[] Magic = "KVX1"u8.ToArray();
+    // The magic is also the AAD, so a blob sealed for one purpose cannot be passed off as another.
+    private static readonly byte[] StoreMagic = "KVX1"u8.ToArray();
+    private static readonly byte[] BackupMagic = "KVB1"u8.ToArray();
     private const int NonceSize = 12, TagSize = 16;
 
     private readonly string _store, _previous, _temp;
@@ -51,47 +53,54 @@ public sealed class SealedStore
         if (!File.Exists(_store)) return null;
         try
         {
-            return Unseal(File.ReadAllBytes(_store));
+            return Unseal(File.ReadAllBytes(_store), StoreMagic);
         }
         catch (Exception e) when (e is CryptographicException or InvalidDataException && File.Exists(_previous))
         {
             _log.LogError(e, "Store {Path} is unreadable; falling back to the previous generation", _store);
-            return Unseal(File.ReadAllBytes(_previous));
+            return Unseal(File.ReadAllBytes(_previous), StoreMagic);
         }
     }
 
     public void Save(ReadOnlySpan<byte> plaintext)
     {
-        PrivateFiles.Write(_temp, Seal(plaintext));
+        PrivateFiles.Write(_temp, Seal(plaintext, StoreMagic));
         if (File.Exists(_store)) File.Replace(_temp, _store, _previous);
         else File.Move(_temp, _store);
     }
 
-    private byte[] Seal(ReadOnlySpan<byte> plaintext)
+    /// <summary>Backups leave kvx, so they are sealed with the same key and restore only where that key unwraps.</summary>
+    public byte[] SealBackup(ReadOnlySpan<byte> plaintext) => Seal(plaintext, BackupMagic);
+
+    /// <exception cref="InvalidDataException">The blob is not a kvx backup.</exception>
+    /// <exception cref="CryptographicException">The blob was sealed by another key or tampered with.</exception>
+    public byte[] UnsealBackup(byte[] sealedBytes) => Unseal(sealedBytes, BackupMagic);
+
+    private byte[] Seal(ReadOnlySpan<byte> plaintext, byte[] magic)
     {
-        var sealedBytes = new byte[Magic.Length + NonceSize + TagSize + plaintext.Length];
+        var sealedBytes = new byte[magic.Length + NonceSize + TagSize + plaintext.Length];
         var span = sealedBytes.AsSpan();
-        Magic.CopyTo(span);
-        var nonce = span.Slice(Magic.Length, NonceSize);
-        var tag = span.Slice(Magic.Length + NonceSize, TagSize);
-        var cipher = span[(Magic.Length + NonceSize + TagSize)..];
+        magic.CopyTo(span);
+        var nonce = span.Slice(magic.Length, NonceSize);
+        var tag = span.Slice(magic.Length + NonceSize, TagSize);
+        var cipher = span[(magic.Length + NonceSize + TagSize)..];
         RandomNumberGenerator.Fill(nonce);
         using var aes = new AesGcm(_key, TagSize);
-        aes.Encrypt(nonce, plaintext, cipher, tag, Magic);
+        aes.Encrypt(nonce, plaintext, cipher, tag, magic);
         return sealedBytes;
     }
 
-    private byte[] Unseal(byte[] sealedBytes)
+    private byte[] Unseal(byte[] sealedBytes, byte[] magic)
     {
         var span = sealedBytes.AsSpan();
-        if (span.Length < Magic.Length + NonceSize + TagSize || !span[..Magic.Length].SequenceEqual(Magic))
-            throw new InvalidDataException("Not a kvx store file.");
-        var nonce = span.Slice(Magic.Length, NonceSize);
-        var tag = span.Slice(Magic.Length + NonceSize, TagSize);
-        var cipher = span[(Magic.Length + NonceSize + TagSize)..];
+        if (span.Length < magic.Length + NonceSize + TagSize || !span[..magic.Length].SequenceEqual(magic))
+            throw new InvalidDataException("Not a sealed kvx blob of the expected kind.");
+        var nonce = span.Slice(magic.Length, NonceSize);
+        var tag = span.Slice(magic.Length + NonceSize, TagSize);
+        var cipher = span[(magic.Length + NonceSize + TagSize)..];
         var plaintext = new byte[cipher.Length];
         using var aes = new AesGcm(_key, TagSize);
-        aes.Decrypt(nonce, cipher, tag, plaintext, Magic);
+        aes.Decrypt(nonce, cipher, tag, plaintext, magic);
         return plaintext;
     }
 }
