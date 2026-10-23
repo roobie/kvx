@@ -31,17 +31,23 @@ Out: a client integration package (Aspire's own is used unchanged); publish-mode
 - Aspire 13.6.3 is current. It serves and trusts the ASP.NET Core dev cert itself, and adds dev-cert trust to non-.NET resources through SSL_CERT_DIR. The community Key Vault emulator's `RunAsEmulator` is prior art for redirecting the vault resource.
 
 ## Now
-Spike: redirect an Aspire 13.6.3 Key Vault resource to a running kvx.
+Hosting package: `RunAsKvx` runs `kvx serve --reuse` as a dashboard resource and redirects the vault to it.
 
 ## Next
-- Spike: an AppHost on Aspire 13.6.3 whose Key Vault resource is marked as an emulator and redirected to a running kvx; confirm no provisioning and that the app's client reaches kvx.
-- Hosting package, start-or-reuse, identity wiring, tests, README, sample, smoke.
+- Hosting package: emulator annotation + `vaultUri` output from `kvx describe`; kvx executable resource with a health check; identity variables, unset variables and WaitFor on every resource that references the vault.
+- Sample AppHost (samples/) with a worker using Aspire's Key Vault client and a non-.NET executable; Aspire.Hosting.Testing tests through it.
+- README, pack, smoke on BR's machine.
 
 ## Evidence
 - Criterion 3: `A_second_server_on_the_same_store_refuses_and_names_the_first` passes; the test run holds the store, and a second `kvx` process exits 1 naming its process id. 47/47 tests.
+- Start-or-reuse lives in kvx: `Reuse_uses_the_serving_kvx_and_serves_once_it_stops` and `Reuse_refuses_a_holder_that_answers_with_other_settings` pass; `kvx describe` is covered by `Describe_says_where_apps_find_kvx_without_connecting`. 50/50.
+- Spike (reading Aspire 13.6.3 source): an `EmulatorResourceAnnotation` keeps a Bicep resource out of provisioning, role assignments and the Azure commands, and in run mode nothing sets its provisioning task, so a `vaultUri` written straight into `Outputs` is what `UriExpression` and the connection string resolve to.
 
 ## Harvest
 - [ ] decision: one serving kvx per store, enforced by an OS file lock held while serving (released by the OS on a crash, so never stale), not a PID file or a port probe
+- [ ] decision: start-or-reuse is kvx's own `serve --reuse`, not logic in the hosting package: DCP keeps owning the process and its logs, the AppHost never decides in advance, and the AppHost's kvx takes over if the developer's stops
+- [ ] decision: tools learn kvx's endpoints from `kvx describe` (kvx's own layered configuration) instead of reading appsettings or assuming ports
+- [ ] decision: redirect the Azure resource (emulator annotation + `vaultUri` output) rather than add a new resource type, so publish mode and the app's client integration stay Aspire's own
 
 ## Log
 - 2026-10-23 initialized; BR chose start-or-reuse of the user's kvx

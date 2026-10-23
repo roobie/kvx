@@ -48,17 +48,23 @@ public sealed class LiveKvx : IAsyncDisposable
     public async Task StartAsync()
     {
         WriteCertificate(CertFile, TrustDir, Domain, DateTimeOffset.UtcNow.AddMinutes(-5), DateTimeOffset.UtcNow.AddDays(30));
-        _app = KvxApp.Build([
-            .. ClientSettings,
-            $"--Kvx:DataDir={DataDir}",
-            .. CertificateSettings,
-        ], b => b.Services.AddSingleton(FakeLogin.Upstream));
+        _app = KvxApp.Build(ServerSettings, b => b.Services.AddSingleton(FakeLogin.Upstream));
         await _app.StartAsync();
+    }
+
+    /// <summary>The settings a second kvx process needs to serve exactly what this one serves.</summary>
+    public string[] ServerSettings => [.. ClientSettings, $"--Kvx:DataDir={DataDir}", .. CertificateSettings];
+
+    /// <summary>Stops serving and releases the store, as a developer stopping their kvx does.</summary>
+    public async Task StopAsync()
+    {
+        if (_app is not null) await _app.DisposeAsync();
+        _app = null;
     }
 
     public async ValueTask DisposeAsync()
     {
-        if (_app is not null) await _app.DisposeAsync();
+        await StopAsync();
         Dir.Dispose();
     }
 
@@ -101,6 +107,36 @@ public sealed class LiveKvx : IAsyncDisposable
         var stderr = p.StandardError.ReadToEndAsync();
         await p.WaitForExitAsync();
         return new Result(p.ExitCode, await stdout, await stderr);
+    }
+
+    /// <summary>`kvx args…` left running, for commands that serve; the caller kills it.</summary>
+    public static Process Start(IEnumerable<string> args)
+    {
+        var psi = new ProcessStartInfo("dotnet")
+        {
+            RedirectStandardError = true,
+            RedirectStandardOutput = true,
+            UseShellExecute = false,
+        };
+        foreach (var a in (string[])[Path.Combine(AppContext.BaseDirectory, "Kvx.Server.dll"), .. args]) psi.ArgumentList.Add(a);
+        return Process.Start(psi)!;
+    }
+
+    /// <summary>Reads <paramref name="p"/>'s stdout until a line contains <paramref name="text"/>; fails after a timeout.</summary>
+    public static async Task WaitForOutput(Process p, string text, TimeSpan? timeout = null)
+    {
+        using var cts = new CancellationTokenSource(timeout ?? TimeSpan.FromSeconds(30));
+        var seen = new System.Text.StringBuilder();
+        try
+        {
+            while (await p.StandardOutput.ReadLineAsync(cts.Token) is { } line)
+            {
+                seen.AppendLine(line);
+                if (line.Contains(text)) return;
+            }
+        }
+        catch (OperationCanceledException) { }
+        throw new Xunit.Sdk.XunitException($"'{text}' never appeared; stdout:\n{seen}");
     }
 
     public sealed record Result(int ExitCode, string Stdout, string Stderr)

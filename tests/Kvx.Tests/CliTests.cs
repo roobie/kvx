@@ -145,6 +145,63 @@ public sealed class CliTests : IAsyncLifetime
         Assert.Contains($"in use by another kvx (process {Environment.ProcessId})", result.Stderr);
     }
 
+    [Fact]
+    public async Task Reuse_uses_the_serving_kvx_and_serves_once_it_stops()
+    {
+        using var second = LiveKvx.Start(["serve", "--reuse", .. _kvx.ServerSettings]);
+        try
+        {
+            await LiveKvx.WaitForOutput(second, "using the kvx already serving this store");
+            await _kvx.StopAsync();
+            await LiveKvx.WaitForOutput(second, "serving it here");
+
+            LiveKvx.Result env;
+            var deadline = DateTime.UtcNow.AddSeconds(30);
+            do env = await LiveKvx.Cli(["env", "--shell", "posix", .. _kvx.ClientSettings]);
+            while (env.ExitCode != 0 && DateTime.UtcNow < deadline);
+            Assert.True(env.ExitCode == 0, env.ToString());
+        }
+        finally
+        {
+            second.Kill(entireProcessTree: true);
+        }
+    }
+
+    [Fact]
+    public async Task Reuse_refuses_a_holder_that_answers_with_other_settings()
+    {
+        using var dir = new TempDir();
+        var result = await LiveKvx.Cli([
+            "serve", "--reuse",
+            $"--urls=https://127.0.0.1:{LiveKvx.FreePort()};http://127.0.0.1:{LiveKvx.FreePort()}",
+            $"--Kvx:DataDir={_kvx.DataDir}",
+            $"--Kvx:TokenFile={Path.Combine(dir.Path, "dev-token")}",
+            .. _kvx.CertificateSettings,
+        ]);
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Contains("in use by another kvx", result.Stderr);
+        Assert.Contains("does not answer as this kvx would", result.Stderr);
+    }
+
+    [Fact]
+    public async Task Describe_says_where_apps_find_kvx_without_connecting()
+    {
+        using var dir = new TempDir();
+        var result = await LiveKvx.Cli(["describe", .. _kvx.ClientSettings, $"--Kvx:DataDir={dir.Path}"]);
+        Assert.True(result.ExitCode == 0, result.ToString());
+
+        using var json = JsonDocument.Parse(result.Stdout);
+        var root = json.RootElement;
+        Assert.Equal($"{_kvx.Urls}/", root.GetProperty("endpoint").GetString());
+        Assert.Equal($"{_kvx.Urls}{IdentityEndpoint.Path}", root.GetProperty("identityEndpoint").GetString());
+        Assert.Equal($"{_kvx.VaultUri("{vault}")}/", root.GetProperty("vaultUriTemplate").GetString());
+        Assert.Equal(_kvx.TokenFile, root.GetProperty("tokenFile").GetString());
+        Assert.Equal(dir.Path, root.GetProperty("dataDir").GetString());
+        Assert.Equal(_kvx.TrustDir, root.GetProperty("sslCertDir").GetString());
+        Assert.Contains("AZURE_CLIENT_SECRET", root.GetProperty("unset").EnumerateArray().Select(e => e.GetString()));
+    }
+
     private static bool OnPath(string command) =>
         (Environment.GetEnvironmentVariable("PATH") ?? "").Split(':').Any(d => File.Exists(Path.Combine(d, command)));
 }
