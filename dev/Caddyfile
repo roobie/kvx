@@ -1,0 +1,11 @@
+# TLS front for kvx during development. Trust Caddy's local CA once with `caddy trust`.
+{
+	admin off
+	skip_install_trust
+	auto_https disable_redirects
+}
+
+https://*.{$KVX_DOMAIN:kvx.localhost}:{$KVX_HTTPS_PORT:8443} {
+	tls internal
+	reverse_proxy {$KVX_UPSTREAM:127.0.0.1:5380}
+}

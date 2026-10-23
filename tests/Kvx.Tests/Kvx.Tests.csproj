@@ -21,6 +21,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Include="../../dev/Caddyfile" Link="Caddyfile" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\src\Kvx.Server\Kvx.Server.csproj" />
   </ItemGroup>
 
