@@ -29,11 +29,10 @@ Out (for now): the keys and certificates APIs; multi-user or networked deploymen
 - Same-user scope means the service runs per user, on loopback.
 
 ## Now
-kvx is an installable dotnet tool on Linux that serves TLS itself with the ASP.NET Core dev cert, so nothing else needs installing. `kvx run` starts unmodified DefaultAzureCredential apps against it, and `kvx import` moves user-secrets in. `kvx doctor` says what is wrong with the machine's setup and how to fix it. An Aspire AppHost gets kvx with `RunAsKvx()`. Choosing the next milestone.
+kvx is an installable dotnet tool on Linux that serves TLS itself with the ASP.NET Core dev cert, so nothing else needs installing. `kvx run` starts unmodified DefaultAzureCredential apps against it, and `kvx import` moves user-secrets in. `kvx doctor` says what is wrong with the machine's setup and how to fix it. An Aspire AppHost gets kvx with `RunAsKvx()`. Initializing the Windows/macOS milestone (U-VFQBGPLYZ3PEJFQG).
 
 ## Next
-- Candidates:
-  - the Windows/macOS key protectors (criterion 3)
+- Windows and macOS (criterion 3), proven in GitHub Actions on a mirror.
 
 ## Evidence
 - Walking skeleton (U-MTGVCUWN5POPRG5D), 2026-10-23: an unmodified app process sets and gets secrets via Caddy at https://test.kvx.localhost; the data dir holds no plaintext name or value (partial evidence for criteria 1 and 2).
