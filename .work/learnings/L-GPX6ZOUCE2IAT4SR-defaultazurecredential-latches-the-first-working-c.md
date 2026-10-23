@@ -5,6 +5,7 @@ read_if:
   - choosing status codes for the identity endpoint
 refs:
   - src/Kvx.Server/Auth/IdentityEndpoint.cs#Token
+  - README.md
 ---
 
 # L-GPX6ZOUCE2IAT4SR DefaultAzureCredential latches the first working credential
