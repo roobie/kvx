@@ -29,11 +29,10 @@ Out (for now): the keys and certificates APIs; multi-user or networked deploymen
 - Same-user scope means the service runs per user, on loopback.
 
 ## Now
-Initializing: purpose, scope and criteria are drafted; the open questions in DESIGN.md need answers before execute.
+Initializing: design questions settled (DESIGN.md "Settled"); ready to enter execute.
 
 ## Next
-- Settle the auth posture and the host-name/certificate approach (DESIGN.md risks).
-- Cut the first milestone: a walking skeleton where SecretClient set/get round-trips through encrypted storage on Linux.
+- Cut the first milestone: a walking skeleton where SecretClient set/get round-trips through the sealed store on Linux, behind Caddy at `https://<vault>.kvx.localhost`.
 
 ## Evidence
 <!-- Proof against success_criteria: test runs, commits, measurements. -->
@@ -42,6 +41,12 @@ Initializing: purpose, scope and criteria are drafted; the open questions in DES
 - [ ] decision: pure .NET over Go (audience, DPAPI, Aspire; distribution recoverable by packaging)
 - [ ] decision: build secrets-only from scratch rather than fork an existing emulator (avoid inheriting keys/certs code and test-double assumptions)
 - [ ] decision: envelope encryption, keyring wraps a data key; never a plaintext fallback
+- [ ] decision: whole-store sealed file over per-value encryption (simpler, hides names)
+- [ ] decision: `*.kvx.localhost` host scheme satisfies SDK challenge verification without client options
+- [ ] decision: systemd-creds --user as the headless Linux key protector
+- [ ] backlog: replace Caddy with Kestrel-managed TLS before packaging as a dotnet tool
+- [ ] backlog: real Entra token validation
 
 ## Log
 - 2026-10-23 initialized; .NET chosen after build-vs-buy and Go-vs-.NET discussion
+- 2026-10-23 settled auth (ephemeral dev tokens), host scheme, Caddy TLS, systemd-creds, whole-store encryption

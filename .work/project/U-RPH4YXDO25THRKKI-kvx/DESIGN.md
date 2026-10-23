@@ -14,11 +14,18 @@ Developers need secrets locally, and the convenient stores keep them in plaintex
 - Go implementation: a better single-binary story, but weaker fit for the .NET audience and Aspire.
 - Not wire-compatible (sops+age, a custom config provider): solves encryption, but dev and prod code diverge.
 
+## Settled (2026-10-23, with BR)
+- Auth, for now: ephemeral dev tokens. The signing key is regenerated on every kvx start, so tokens never outlive the process. This keeps development unblocked; real Entra validation can come later.
+- Host name: look real without `DisableChallengeResourceVerification`. The SDK only checks that the request host ends with the challenge resource's host, so kvx answers with resource `https://kvx.localhost` and vaults live at `https://<vault>.kvx.localhost`. No azure.net names are hijacked and no SDK option is needed.
+- TLS: Caddy reverse proxy with `tls internal` (its own CA, trusted via `caddy trust`) for development.
+- Headless Linux: `systemd-creds --user` wraps the data key. It needs no UX, works unprivileged (verified on systemd 257) and uses TPM2 when present. A passphrase/agent fallback waits until someone needs it.
+- Storage: the whole store (names, tags, attributes, values) is one AES-GCM sealed file, loaded into memory and atomically replaced on write. This is simpler than per-value encryption and hides names for free. The ergonomic cost is only that the file can't be inspected directly; the CLI covers that.
+
 ## Risks & open questions
-- Auth posture: accept any bearer token, validate real Entra JWTs offline, or a local trust model (loopback plus a keyring-held token)? Ties into what `DefaultAzureCredential` does on a dev box.
-- SDK challenge-resource verification: emulate a host name the SDK accepts without `DisableChallengeResourceVerification`, or require that option? Zero-config compatibility depends on it.
-- Certificate trust: generate a per-user CA or reuse the dotnet dev-cert?
-- Headless Linux fallback: systemd-creds, a session passphrase (agent model), or pass/GPG?
-- Do secret names, tags and content types also need encryption? Names leak information, but listing needs them.
+- How a client obtains a dev token: tests can use a static credential; apps using `DefaultAzureCredential` need a path (a managed-identity-style endpoint via `IDENTITY_ENDPOINT` is the candidate). It would also catch token requests for other Azure resources.
+- `*.localhost` resolves to loopback with systemd-resolved and browsers, but not with every glibc setup; may need a hosts entry or a check.
+- Caddy is an extra runtime dependency for a dotnet tool; revisit (Kestrel with its own CA) before packaging.
+- Whole-file store: a corrupt or truncated write loses everything, so keep the previous generation. Fine for dev-sized stores (thousands of secrets), not beyond.
+- Machine-bound keys (DPAPI, systemd-creds) make a copied store useless elsewhere. That is intended, but losing the machine loses the secrets; an explicit export/backup path is needed.
 - Keyring prompts (Keychain, some Secret Service setups) can block at startup; the service must tolerate this.
 - Must detect a missing libsecret and fail with a clear message.
