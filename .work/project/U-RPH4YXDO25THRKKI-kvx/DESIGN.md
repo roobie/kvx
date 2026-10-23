@@ -21,12 +21,12 @@ Developers need secrets locally, and the convenient stores keep them in plaintex
 - TLS: Caddy reverse proxy with `tls internal` (its own CA, trusted via `caddy trust`) for development.
 - Headless Linux: `systemd-creds --user` wraps the data key. It needs no UX, works unprivileged (verified on systemd 257) and uses TPM2 when present. A passphrase/agent fallback waits until someone needs it.
 - Storage: the whole store (names, tags, attributes, values) is one AES-GCM sealed file, loaded into memory and atomically replaced on write. This is simpler than per-value encryption and hides names for free. The ergonomic cost is only that the file can't be inspected directly; the CLI covers that.
+- One `kvx` tool. Its helper commands (run, env, import) are clients of the serving kvx and never open the store (D-L4OU7YMFJ6W6OENA). `kvx run` removes the credential variables that would outrank kvx (D-IJMXLBG5U3LFTH62).
 
 ## Risks & open questions
 - An app using kvx through `DefaultAzureCredential` gets every Azure token from kvx. Other resources pass through to the developer's login (D-BGGXSS3A5S3YOP24), so locally the app acts as the developer, not as its managed identity. Access can then differ from production, and kvx must find the developer's CLIs and login when running as a service.
-- Getting IDENTITY_ENDPOINT and IDENTITY_HEADER into an app's environment is manual until a `kvx run`/`kvx env` command or Aspire wiring exists.
 - `*.localhost` resolves to loopback with systemd-resolved and browsers, but not with every glibc setup; may need a hosts entry or a check.
-- Caddy is an extra runtime dependency for a dotnet tool; revisit (Kestrel with its own CA) before packaging.
+- Caddy is an extra runtime dependency for the dotnet tool, which is packaged now; Kestrel with its own CA would remove it.
 - Whole-file store: a corrupt or truncated write loses everything, so keep the previous generation. Fine for dev-sized stores (thousands of secrets), not beyond.
 - Machine-bound keys (DPAPI, systemd-creds) make a copied store useless elsewhere. That is intended, but losing the machine loses the secrets; an explicit export/backup path is needed.
 - Keyring prompts (Keychain, some Secret Service setups) can block at startup; the service must tolerate this.
