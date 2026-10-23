@@ -29,12 +29,11 @@ Out (for now): the keys and certificates APIs; multi-user or networked deploymen
 - Same-user scope means the service runs per user, on loopback.
 
 ## Now
-kvx is an installable dotnet tool on Linux. `kvx run` starts unmodified DefaultAzureCredential apps against it, and `kvx import` moves user-secrets in. Choosing the next milestone.
+kvx is an installable dotnet tool on Linux that serves TLS itself with the ASP.NET Core dev cert, so nothing else needs installing. `kvx run` starts unmodified DefaultAzureCredential apps against it, and `kvx import` moves user-secrets in. Choosing the next milestone.
 
 ## Next
 - Candidates:
   - the Windows/macOS key protectors (criterion 3)
-  - Kestrel-managed TLS, so Caddy is no longer an extra install
   - `kvx doctor` (B-6UOHZXCHMFX3OSIY)
   - the Aspire hosting integration (criterion 6)
 
@@ -44,15 +43,16 @@ kvx is an installable dotnet tool on Linux. `kvx run` starts unmodified DefaultA
 - DefaultAzureCredential (U-VLRFD3QF7OBYKRKF), 2026-10-23: an app whose only credential code is `new DefaultAzureCredential()` round-trips through Caddy, configured by two environment variables. Tokens survive kvx restarts within the login session (22/22 tests).
 - Az passthrough (U-CXXMFJZTD4J77REJ), 2026-10-23: the same app process also gets a token for another Azure resource from the developer's login. A missing login fails fast with 400 and sign-in instructions, confirmed live with the real credential chain (26/26 tests).
 - Packaging (U-NFJTG766TNW2O6U2), 2026-10-23: `dotnet pack` produces the `kvx` tool. Installed to a fresh tool path, it serves from an unrelated directory, and its `env` output is accepted by sh and fish. `kvx run` round-trips the unmodified app through Caddy despite a service principal in the caller's environment, and passes through the app's exit code. `kvx import` moves user-secrets in, and AddAzureKeyVault reads them back (criterion 5, on Linux; Caddy is still a separate install). 35/35 tests.
+- Kestrel TLS (U-OAREUQEMOSGNLS4M), 2026-10-23: Caddy is gone. The installed tool serves `https://<vault>.dev.localhost:5381` with the real dev cert, and `kvx run` round-trips the unmodified app with no trust variables from the caller; with no certificate kvx refuses to start and says how to get one. Criterion 5 now needs only the dotnet tool on Linux. 36/36 tests.
 
 ## Harvest
 - [ ] decision: pure .NET over Go (audience, DPAPI, Aspire; distribution recoverable by packaging)
 - [ ] decision: build secrets-only from scratch rather than fork an existing emulator (avoid inheriting keys/certs code and test-double assumptions)
 - [ ] decision: envelope encryption, keyring wraps a data key; never a plaintext fallback
 - [ ] decision: whole-store sealed file over per-value encryption (simpler, hides names)
-- [ ] decision: `*.kvx.localhost` host scheme satisfies SDK challenge verification without client options
+- [x] decision: `*.kvx.localhost` host scheme satisfies SDK challenge verification without client options → D-LLPISGPW4SP4BB4K (now `*.dev.localhost`)
 - [ ] decision: systemd-creds --user as the headless Linux key protector
-- [ ] backlog: replace Caddy with Kestrel-managed TLS before packaging as a dotnet tool
+- [x] backlog: replace Caddy with Kestrel-managed TLS before packaging as a dotnet tool → done by U-OAREUQEMOSGNLS4M
 - [ ] backlog: real Entra token validation
 
 ## Log
@@ -62,3 +62,4 @@ kvx is an installable dotnet tool on Linux. `kvx run` starts unmodified DefaultA
 - 2026-10-23 walking-skeleton milestone delivered and closed
 - 2026-10-23 secrets-conformance milestone delivered and closed
 - 2026-10-23 packaging milestone delivered and closed
+- 2026-10-23 kestrel-tls milestone delivered and closed; Caddy replaced by the dev cert
