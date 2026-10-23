@@ -29,12 +29,11 @@ Out (for now): the keys and certificates APIs; multi-user or networked deploymen
 - Same-user scope means the service runs per user, on loopback.
 
 ## Now
-kvx is an installable dotnet tool on Linux that serves TLS itself with the ASP.NET Core dev cert, so nothing else needs installing. `kvx run` starts unmodified DefaultAzureCredential apps against it, and `kvx import` moves user-secrets in. Choosing the next milestone.
+kvx is an installable dotnet tool on Linux that serves TLS itself with the ASP.NET Core dev cert, so nothing else needs installing. `kvx run` starts unmodified DefaultAzureCredential apps against it, and `kvx import` moves user-secrets in. `kvx doctor` says what is wrong with the machine's setup and how to fix it. Choosing the next milestone.
 
 ## Next
 - Candidates:
   - the Windows/macOS key protectors (criterion 3)
-  - `kvx doctor` (B-6UOHZXCHMFX3OSIY)
   - the Aspire hosting integration (criterion 6)
 
 ## Evidence
@@ -44,6 +43,7 @@ kvx is an installable dotnet tool on Linux that serves TLS itself with the ASP.N
 - Az passthrough (U-CXXMFJZTD4J77REJ), 2026-10-23: the same app process also gets a token for another Azure resource from the developer's login. A missing login fails fast with 400 and sign-in instructions, confirmed live with the real credential chain (26/26 tests).
 - Packaging (U-NFJTG766TNW2O6U2), 2026-10-23: `dotnet pack` produces the `kvx` tool. Installed to a fresh tool path, it serves from an unrelated directory, and its `env` output is accepted by sh and fish. `kvx run` round-trips the unmodified app through Caddy despite a service principal in the caller's environment, and passes through the app's exit code. `kvx import` moves user-secrets in, and AddAzureKeyVault reads them back (criterion 5, on Linux; Caddy is still a separate install). 35/35 tests.
 - Kestrel TLS (U-OAREUQEMOSGNLS4M), 2026-10-23: Caddy is gone. The installed tool serves `https://<vault>.dev.localhost:5381` with the real dev cert, and `kvx run` round-trips the unmodified app with no trust variables from the caller; with no certificate kvx refuses to start and says how to get one. Criterion 5 now needs only the dotnet tool on Linux. 36/36 tests.
+- kvx doctor (U-NZQKGC3WEV7UKMVJ), 2026-10-23: `kvx doctor` checks name resolution, the certificate kvx would serve, the key protector, and the serving kvx with a live handshake, and gives a fix for each failure. Each failure is induced in a test, and kvx's startup and not-serving errors point to it. The installed tool reports all five checks ok on BR's machine. 46/46 tests.
 
 ## Harvest
 - [ ] decision: pure .NET over Go (audience, DPAPI, Aspire; distribution recoverable by packaging)
@@ -63,3 +63,4 @@ kvx is an installable dotnet tool on Linux that serves TLS itself with the ASP.N
 - 2026-10-23 secrets-conformance milestone delivered and closed
 - 2026-10-23 packaging milestone delivered and closed
 - 2026-10-23 kestrel-tls milestone delivered and closed; Caddy replaced by the dev cert
+- 2026-10-23 kvx-doctor milestone delivered and closed
