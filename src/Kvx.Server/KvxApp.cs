@@ -27,6 +27,7 @@ public static class KvxApp
             sp.GetRequiredService<ILoggerFactory>().CreateLogger<SealedStore>()));
         builder.Services.AddSingleton<SecretRepository>();
         builder.Services.AddSingleton<DevTokens>();
+        builder.Services.AddHostedService<Names.LoopbackDns>();
         builder.Services.TryAddSingleton(sp => Upstream.FromConfig(sp.GetRequiredService<IOptions<KvxOptions>>().Value.Passthrough));
         builder.Services.ConfigureHttpJsonOptions(o =>
             o.SerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull);
@@ -35,6 +36,7 @@ public static class KvxApp
 
         // Fail at startup, not on the first request, when the key or store is unusable.
         app.Services.GetRequiredService<SecretRepository>();
+        app.Services.GetRequiredService<IOptions<KvxOptions>>().Value.ResolveDns();
 
         app.UseRouting();   // so the auth middleware can see which endpoint was matched
         app.UseChallengeAuth();

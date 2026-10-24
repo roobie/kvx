@@ -6,6 +6,7 @@ using System.Security.Authentication;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Kvx.Server.Keys;
+using Kvx.Server.Names;
 
 namespace Kvx.Server.Cli;
 
@@ -31,13 +32,14 @@ public static class DoctorCommand
         var options = new KvxOptions();
         config.GetSection("Kvx").Bind(options);
         var host = $"{ProbeLabel}.{options.Domain}";
+        var serving = (await Serving(args, config["urls"], host)).ToList();
 
         List<Finding> findings =
         [
-            await NameResolution(host, options.Domain),
+            await NameResolution(host, options, serving[0].Status == Status.Ok),
             Certificate(config, host, options.Domain),
             KeyProtector(options),
-            .. await Serving(args, config["urls"], host),
+            .. serving,
         ];
 
         foreach (var f in findings)
@@ -49,18 +51,45 @@ public static class DoctorCommand
         return findings.Any(f => f.Status == Status.Fail) ? 1 : 0;
     }
 
-    private static async Task<Finding> NameResolution(string host, string domain)
+    private static readonly string HostsFile = OperatingSystem.IsWindows()
+        ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "drivers", "etc", "hosts")
+        : "/etc/hosts";
+
+    private static async Task<Finding> NameResolution(string host, KvxOptions options, bool serving)
     {
         const string check = "name resolution";
-        var hosts = OperatingSystem.IsWindows()
-            ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "drivers", "etc", "hosts")
-            : "/etc/hosts";
-        var perVault = $"add `127.0.0.1 <vault>.{domain}` to {hosts} for each vault";
+        var domain = options.Domain;
+        var perVault = $"add `127.0.0.1 <vault>.{domain}` to {HostsFile} for each vault";
+        var dns = OperatingSystem.IsWindows() ? options.ResolveDns() : null;
+        var responder = dns is not null && LoopbackDns.Covers(host);
+        var nrpt = dns?.Port == 53
+            ? $"once, in an elevated PowerShell: `Add-DnsClientNrptRule -Namespace '.localhost' -NameServers '{dns.Address}'`; " +
+              $"kvx then answers vault names while it runs. Where that can't work (Group Policy NRPT rules), {perVault}"
+            : perVault;
         var fix = OperatingSystem.IsLinux()
             ? "vault names need the `myhostname` NSS module or systemd-resolved; install it (Debian/Ubuntu: " +
               "`sudo apt install libnss-myhostname`) and put `myhostname` before `dns` on the `hosts:` line of " +
               $"/etc/nsswitch.conf; or {perVault}"
-            : perVault;
+            : responder ? nrpt : perVault;
+
+        var (resolved, detail) = await Resolve(host);
+        if (resolved) return new(Status.Ok, check, detail);
+
+        // A hosts-file user names each vault there; the probe name having no line of its own is no fault.
+        var listed = HostsNames(domain);
+        if (listed.Count > 0 && (await Task.WhenAll(listed.Select(Resolve))).All(r => r.Resolved))
+            return new(Status.Warn, check, $"{detail}; the vaults in {HostsFile} resolve ({string.Join(", ", listed)}), a new one needs a line too", fix);
+
+        if (!responder) return new(Status.Fail, check, detail, fix);
+        if (await LoopbackDns.AnswersAt(dns!, host, TimeSpan.FromSeconds(2)))
+            return new(Status.Fail, check, $"{detail}; kvx answers it on udp {dns}, but Windows doesn't ask kvx", nrpt);
+        return serving
+            ? new(Status.Fail, check, $"{detail}; kvx serves, but nothing answers DNS on udp {dns} (another program may hold the port)", perVault)
+            : new(Status.Warn, check, $"{detail}; on Windows vault names resolve while kvx serves", $"start kvx; if it never resolves, {nrpt}");
+    }
+
+    private static async Task<(bool Resolved, string Detail)> Resolve(string host)
+    {
         IPAddress[] addresses;
         try
         {
@@ -69,12 +98,27 @@ public static class DoctorCommand
         }
         catch (Exception e) when (e is SocketException or OperationCanceledException)
         {
-            return new(Status.Fail, check, $"{host} does not resolve ({e.Message})", fix);
+            return (false, $"{host} does not resolve ({e.Message})");
         }
         var shown = string.Join(", ", addresses.Select(a => a.ToString()));
         return addresses.Length > 0 && addresses.All(IPAddress.IsLoopback)
-            ? new(Status.Ok, check, $"{host} → {shown}")
-            : new(Status.Fail, check, $"{host} resolves to {shown}, not to loopback", fix);
+            ? (true, $"{host} → {shown}")
+            : (false, $"{host} resolves to {shown}, not to loopback");
+    }
+
+    /// <summary>The names under the vault domain that the OS hosts file lists.</summary>
+    private static List<string> HostsNames(string domain)
+    {
+        string[] lines;
+        try { lines = File.ReadAllLines(HostsFile); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return []; }
+        return lines
+            .Select(l => l.Split('#')[0].Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries))
+            .Where(fields => fields.Length > 1)
+            .SelectMany(fields => fields.Skip(1))
+            .Where(name => name.EndsWith("." + domain, StringComparison.OrdinalIgnoreCase))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
     }
 
     private static Finding Certificate(IConfiguration config, string host, string domain)

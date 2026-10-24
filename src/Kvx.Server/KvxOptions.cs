@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Net;
 
 namespace Kvx.Server;
 
@@ -40,6 +41,21 @@ public sealed class KvxOptions
     /// `kvx env` add it. Empty means $HOME/.aspnet/dev-certs/trust.
     /// </summary>
     public string DevCertTrustDir { get; set; } = "";
+
+    /// <summary>
+    /// Where kvx answers DNS for *.localhost (see <see cref="Names.LoopbackDns"/>): an ip:port, "off", or empty for
+    /// 127.0.0.1:53 on Windows and off elsewhere, whose resolvers already answer *.localhost.
+    /// </summary>
+    public string Dns { get; set; } = "";
+
+    public IPEndPoint? ResolveDns() => Dns switch
+    {
+        "" => OperatingSystem.IsWindows() ? new IPEndPoint(IPAddress.Loopback, 53) : null,
+        "off" => null,
+        _ => IPEndPoint.TryParse(Dns, out var endpoint) && endpoint.Port != 0
+            ? endpoint
+            : throw new InvalidOperationException($"Kvx:Dns is `{Dns}`; use ip:port, `off`, or empty for the OS default."),
+    };
 
     public string ResolveDataDir()
     {

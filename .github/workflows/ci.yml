@@ -49,6 +49,12 @@ jobs:
         shell: pwsh
         run: ./.github/scripts/trust-test-ca.ps1
 
+      # The one-time setup `kvx doctor` asks of a Windows user: vault names go to the responder in kvx.
+      - name: Send .localhost to kvx
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Add-DnsClientNrptRule -Namespace '.localhost' -NameServers '127.0.0.1'
+
       - run: dotnet build Kvx.slnx -c Release
 
       - name: Test
