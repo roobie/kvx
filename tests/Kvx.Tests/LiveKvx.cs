@@ -79,7 +79,7 @@ public sealed class LiveKvx : IAsyncDisposable
     /// store, which a test can't change without admin rights or a prompt. Unset, as on Linux, certificates are self-signed
     /// and the trust directory is enough.
     /// </summary>
-    private static readonly X509Certificate2? TestCa =
+    internal static readonly X509Certificate2? TestCa =
         Environment.GetEnvironmentVariable("KVX_TEST_CA") is { Length: > 0 } path
             ? X509CertificateLoader.LoadPkcs12FromFile(path, CertPassword)
             : null;

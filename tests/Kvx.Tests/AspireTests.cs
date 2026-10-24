@@ -98,6 +98,10 @@ public sealed class AspireTests : IAsyncLifetime
             .. _kvx.ServerSettings.Select((s, i) => $"--Kvx:Settings:{i}={s}"),
         ]);
         configureWorker?.Invoke(builder.CreateResourceBuilder<ProjectResource>("worker"));
+        // Windows' curl (Schannel) refuses a CA-issued certificate whose revocation it can't check. The test CA has no
+        // revocation list, while the dev cert a user has is self-signed, which Schannel doesn't check.
+        if (OperatingSystem.IsWindows() && LiveKvx.TestCa is not null)
+            builder.CreateResourceBuilder<ExecutableResource>("curl").WithArgs("--ssl-no-revoke");
         var log = new CollectingLoggerProvider();
         builder.Services.AddLogging(l => l.AddProvider(log));
         var app = await builder.BuildAsync();

@@ -33,9 +33,11 @@ Responder, setting, doctor and README in place; local Linux 66/66. Pushing for t
 
 ## Evidence
 - Local Linux: the whole suite passes, with the responder tested on a free port (answers, refusals, malformed input, takeover).
+- Run 40048722510 (94f8032): windows-latest 65/66; every name resolves through the NRPT rule. The one failure was Windows' curl refusing the test CA's certificate for its revocation check (CRYPT_E_NO_REVOCATION_CHECK); the test now passes `--ssl-no-revoke` there.
 
 ## Harvest
 - [ ] learning: since .NET 10, BackgroundService.StartAsync returns before ExecuteAsync's synchronous part has run, so a test can't assume a bind happened at start
+- [ ] learning: Schannel (Windows' curl) fails a CA-issued certificate with no revocation list, but doesn't check a self-signed one like the dev cert; only the test CA needs `--ssl-no-revoke`
 
 ## Log
 - 2026-10-24 initialized
