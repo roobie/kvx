@@ -47,7 +47,8 @@ jobs:
       - run: dotnet build Kvx.slnx -c Release
 
       - name: Test
-        run: dotnet test tests/Kvx.Tests -c Release --no-build --logger "trx;LogFileName=results.trx" --logger "console;verbosity=normal"
+        # A hanging test is named and dumped after 5 min instead of silently using up the job's timeout.
+        run: dotnet test tests/Kvx.Tests -c Release --no-build --blame-hang-timeout 5m --logger "trx;LogFileName=results.trx" --logger "console;verbosity=normal"
 
       - uses: actions/upload-artifact@v4
         if: always()

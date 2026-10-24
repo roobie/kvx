@@ -109,7 +109,15 @@ public sealed class LiveKvx : IAsyncDisposable
         using var p = Process.Start(psi)!;
         var stdout = p.StandardOutput.ReadToEndAsync();
         var stderr = p.StandardError.ReadToEndAsync();
-        await p.WaitForExitAsync();
+        // A command that should exit but serves instead would otherwise hold the whole run until CI kills it.
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+        try { await p.WaitForExitAsync(cts.Token); }
+        catch (OperationCanceledException)
+        {
+            p.Kill(entireProcessTree: true);
+            await p.WaitForExitAsync();
+            throw new TimeoutException($"`{file} {string.Join(' ', args)}` did not exit within 60 s.\n{await stdout}\n{await stderr}");
+        }
         return new Result(p.ExitCode, await stdout, await stderr);
     }
 

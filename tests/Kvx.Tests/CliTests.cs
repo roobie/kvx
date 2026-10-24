@@ -118,6 +118,8 @@ public sealed class CliTests : IAsyncLifetime
     [Fact]
     public async Task Serve_without_a_certificate_refuses_and_says_how_to_get_one()
     {
+        // Only on Linux does the dev cert live under HOME; elsewhere it is in the OS store, which a test can't hide.
+        if (!OperatingSystem.IsLinux()) return;
         using var home = new TempDir();   // a user with no dev cert
         var result = await LiveKvx.Cli([
             $"--urls=https://127.0.0.1:{LiveKvx.FreePort()};http://127.0.0.1:{LiveKvx.FreePort()}",

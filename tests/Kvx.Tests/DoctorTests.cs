@@ -62,6 +62,8 @@ public sealed class DoctorTests : IAsyncLifetime
     [Fact]
     public async Task A_user_without_a_dev_cert_is_told_to_create_one()
     {
+        // Only on Linux does the dev cert live under HOME; elsewhere it is in the OS store, which a test can't hide.
+        if (!OperatingSystem.IsLinux()) return;
         using var home = new TempDir();
         var result = await Doctor(NotServing(), psi => { psi.Environment["HOME"] = home.Path; psi.Environment["DOTNET_CLI_HOME"] = home.Path; });
 
