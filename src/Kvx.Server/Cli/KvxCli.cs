@@ -25,6 +25,13 @@ public static class KvxCli
         }
         var reuse = args.Contains(ReuseFlag);
         args = args.Where(a => a != ReuseFlag).ToArray();
+
+        // Before the store opens: a start that cannot serve https should not touch the keyring (on macOS that can
+        // mean waiting on a keychain that isn't there).
+        var config = KvxApp.Configuration(args);
+        if (KvxClient.ListenEndpoint(config["urls"], "https") is not null && ServedCertificate.Find(config) is (null, { } missing))
+            return Fail($"{missing.Problem}; {missing.Fix}. {DoctorHint}");
+
         try
         {
             while (true)

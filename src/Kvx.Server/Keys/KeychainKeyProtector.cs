@@ -81,6 +81,10 @@ public sealed class KeychainKeyProtector : IKeyProtector
 
     private byte[]? Read()
     {
+        // Without a login keychain `security` waits on a prompt to create one, which no one can see.
+        var login = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Library", "Keychains", "login.keychain-db");
+        if (!File.Exists(login))
+            throw new KeyProtectorException($"There is no login keychain at {login}, so kvx has nowhere to keep its key.");
         var (exit, stdout, stderr) = Run(["find-generic-password", "-s", Service, "-a", _account, "-w"], stdin: null);
         if (exit == ItemNotFound) return null;
         if (exit != 0) throw Failure("read", stderr);
