@@ -4,7 +4,10 @@ using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Kvx.Server;
+using Kvx.Server.Names;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 
 namespace Kvx.Tests;
 
@@ -33,6 +36,7 @@ public sealed class LiveKvx : IAsyncDisposable
         $"--Kvx:TokenFile={TokenFile}",
         $"--Kvx:Domain={Domain}",
         $"--Kvx:DevCertTrustDir={TrustDir}",
+        "--Kvx:Dns=off",   // the run's one responder answers instead; see Names
     ];
 
     public string VaultUri(string vault) => $"https://{vault}.{Domain}:{HttpsPort}";
@@ -49,8 +53,27 @@ public sealed class LiveKvx : IAsyncDisposable
     public void PrepareCertificate() =>
         WriteCertificate(CertFile, TrustDir, Domain, DateTimeOffset.UtcNow.AddMinutes(-5), DateTimeOffset.UtcNow.AddDays(30));
 
+    /// <summary>
+    /// On Windows, one *.localhost responder on :53 for the whole run. Were each test's kvx to answer, names would stop
+    /// resolving in the gap between one stopping and the next binding, and tests running then would fail.
+    /// </summary>
+    private static readonly Lazy<Task> Names = new(async () =>
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        var responder = new LoopbackDns(Options.Create(new KvxOptions()), NullLogger<LoopbackDns>.Instance);
+        await responder.StartAsync(default);   // never stopped: it lives as long as the test process
+        var endpoint = new IPEndPoint(IPAddress.Loopback, 53);
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(20);
+        while (!await LoopbackDns.AnswersAt(endpoint, "localhost", TimeSpan.FromSeconds(1)))
+            if (DateTime.UtcNow > deadline) throw new InvalidOperationException("Nothing answers DNS on 127.0.0.1:53.");
+    });
+
+    /// <summary>Vault names under <see cref="Domain"/> resolve once this completes; for a kvx started elsewhere.</summary>
+    public static Task NamesResolve() => Names.Value;
+
     public async Task StartAsync()
     {
+        await NamesResolve();
         PrepareCertificate();
         _app = KvxApp.Build(ServerSettings, b => b.Services.AddSingleton(FakeLogin.Upstream));
         await _app.StartAsync();

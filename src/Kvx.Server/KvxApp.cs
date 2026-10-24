@@ -14,6 +14,11 @@ public static class KvxApp
     {
         var builder = WebApplication.CreateBuilder(Options(args));
         configure?.Invoke(builder);
+        // Kestrel's own default reloads a certificate file when it changes. Its watcher can deadlock when a change
+        // arrives during startup (seen as a hang dump: CertificatePathWatcher against CompositeChangeToken). Replacing
+        // the certificate already means a kvx restart, as replacing it in the store does.
+        builder.WebHost.ConfigureKestrel((context, kestrel) =>
+            kestrel.Configure(context.Configuration.GetSection("Kestrel"), reloadOnChange: false));
 
         builder.Services.AddOptions<KvxOptions>()
             .Bind(builder.Configuration.GetSection("Kvx"))

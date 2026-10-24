@@ -26,7 +26,7 @@ Out: real-machine checks CI can't make (Home editions, Group Policy NRPT, ICS on
 - Several kvx may run (tests, an AppHost and a shell); only one can hold port 53, and all answer alike.
 
 ## Now
-Responder, setting, doctor and README in place; local Linux 66/66. Pushing for the Windows read.
+Responder, setting, doctor and README in place. Tests now share one responder for the run, and kvx no longer watches its certificate file; local Linux 66/66. Pushing for the three-OS read.
 
 ## Next
 - Read CI; then finalize.
@@ -34,10 +34,13 @@ Responder, setting, doctor and README in place; local Linux 66/66. Pushing for t
 ## Evidence
 - Local Linux: the whole suite passes, with the responder tested on a free port (answers, refusals, malformed input, takeover).
 - Run 40048722510 (94f8032): windows-latest 65/66; every name resolves through the NRPT rule. The one failure was Windows' curl refusing the test CA's certificate for its revocation check (CRYPT_E_NO_REVOCATION_CHECK); the test now passes `--ssl-no-revoke` there.
+- Run 40049023964 (8c3117a): macOS green. Windows 64/66: one test hit "No such host" in the gap between one test kvx releasing :53 and the next binding it; the sample's curl wrote to `/dev/null`, which Windows lacks (exit 23). Ubuntu hung in `LiveKvx.StartAsync`; the hang dump shows Kestrel's CertificatePathWatcher deadlocked against a CompositeChangeToken while the just-written certificate file changed.
 
 ## Harvest
 - [ ] learning: since .NET 10, BackgroundService.StartAsync returns before ExecuteAsync's synchronous part has run, so a test can't assume a bind happened at start
 - [ ] learning: Schannel (Windows' curl) fails a CA-issued certificate with no revocation list, but doesn't check a self-signed one like the dev cert; only the test CA needs `--ssl-no-revoke`
+- [ ] learning: Kestrel's default certificate-file reload can deadlock when the file changes during startup; kvx turns it off
+- [ ] learning: names stop resolving on Windows whenever no process holds :53, so a test run holds one responder for its whole life rather than per kvx
 
 ## Log
 - 2026-10-24 initialized

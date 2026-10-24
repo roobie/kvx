@@ -21,7 +21,7 @@ public sealed class AspireTests : IAsyncLifetime
     public Task InitializeAsync()
     {
         _kvx.PrepareCertificate();
-        return Task.CompletedTask;
+        return LiveKvx.NamesResolve();
     }
 
     public Task DisposeAsync() => _kvx.DisposeAsync().AsTask();
