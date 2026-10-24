@@ -16,10 +16,10 @@ public sealed class KvxOptions
     [Required] public string RecoveryLevel { get; set; } = "";
     [Range(7, 90)] public int RecoverableDays { get; set; }
 
-    /// <summary>Empty means $XDG_DATA_HOME/kvx.</summary>
+    /// <summary>Empty means the user's local app data: $XDG_DATA_HOME/kvx, %LOCALAPPDATA%\kvx, ~/Library/Application Support/kvx.</summary>
     public string DataDir { get; set; } = "";
 
-    /// <summary>Empty means $XDG_RUNTIME_DIR/kvx/dev-token.</summary>
+    /// <summary>Empty means $XDG_RUNTIME_DIR/kvx/dev-token on Linux, kvx/dev-token in the user's temp dir elsewhere.</summary>
     public string TokenFile { get; set; } = "";
 
     /// <summary>
@@ -44,11 +44,9 @@ public sealed class KvxOptions
     public string ResolveDataDir()
     {
         if (!string.IsNullOrEmpty(DataDir)) return DataDir;
-        var xdg = Environment.GetEnvironmentVariable("XDG_DATA_HOME");
-        var root = string.IsNullOrEmpty(xdg)
-            ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "share")
-            : xdg;
-        return Path.Combine(root, "kvx");
+        // .NET maps this to each OS's convention, XDG_DATA_HOME included on Linux.
+        return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData,
+            Environment.SpecialFolderOption.DoNotVerify), "kvx");
     }
 
     public string ResolveDevCertTrustDir() =>
@@ -59,6 +57,9 @@ public sealed class KvxOptions
     public string ResolveTokenFile()
     {
         if (!string.IsNullOrEmpty(TokenFile)) return TokenFile;
+        // Windows and macOS have no per-user directory cleared at logout; the temp dir is private to the user, and
+        // DevTokens drops a token older than the last boot.
+        if (!OperatingSystem.IsLinux()) return Path.Combine(Path.GetTempPath(), "kvx", "dev-token");
         var runtime = Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR");
         if (string.IsNullOrEmpty(runtime))
             throw new InvalidOperationException(

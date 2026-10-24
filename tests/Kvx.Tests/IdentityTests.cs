@@ -118,4 +118,17 @@ public sealed class IdentityTests : IDisposable
             newSession.SecretClient("https://v.dev.localhost", first).GetSecretAsync("s"));
         Assert.Equal(401, rejected.Status);
     }
+
+    [Fact]
+    public void A_token_written_before_the_last_boot_is_replaced()
+    {
+        string first;
+        using (var kvx = new KvxHost(_dir)) first = kvx.Token;
+        var boot = Kvx.Server.MachineBoot.Time();
+        Assert.NotNull(boot);   // every OS kvx supports says when it booted
+        File.SetLastWriteTimeUtc(Path.Combine(_dir.Path, "run", "dev-token"), boot.Value.AddMinutes(-1));
+
+        using var afterReboot = new KvxHost(_dir);
+        Assert.NotEqual(first, afterReboot.Token);
+    }
 }

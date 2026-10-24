@@ -23,7 +23,9 @@ public sealed class CliTests : IAsyncLifetime
             });
 
         Assert.True(result.ExitCode == 0, result.ToString());
-        Assert.Equal($"{_kvx.Urls}{IdentityEndpoint.Path}|{File.ReadAllText(_kvx.TokenFile).Trim()}|unset|{_kvx.TrustDir}:/etc/ssl/certs",
+        // SSL_CERT_DIR is only how OpenSSL tools on Linux find the dev cert; elsewhere kvx leaves it alone.
+        var certDir = OperatingSystem.IsLinux() ? $"{_kvx.TrustDir}:/etc/ssl/certs" : "/etc/ssl/certs";
+        Assert.Equal($"{_kvx.Urls}{IdentityEndpoint.Path}|{File.ReadAllText(_kvx.TokenFile).Trim()}|unset|{certDir}",
             result.Stdout.Trim());
         Assert.Contains("unset AZURE_CLIENT_SECRET", result.Stderr);
     }
@@ -201,8 +203,29 @@ public sealed class CliTests : IAsyncLifetime
         Assert.Equal($"{_kvx.VaultUri("{vault}")}/", root.GetProperty("vaultUriTemplate").GetString());
         Assert.Equal(_kvx.TokenFile, root.GetProperty("tokenFile").GetString());
         Assert.Equal(dir.Path, root.GetProperty("dataDir").GetString());
-        Assert.Equal(_kvx.TrustDir, root.GetProperty("sslCertDir").GetString());
+        Assert.Equal(OperatingSystem.IsLinux() ? _kvx.TrustDir : null, root.GetProperty("sslCertDir").GetString());
         Assert.Contains("AZURE_CLIENT_SECRET", root.GetProperty("unset").EnumerateArray().Select(e => e.GetString()));
+    }
+
+    [Fact]
+    public async Task Describe_reports_this_OSs_default_data_dir_and_token_file()
+    {
+        using var dir = new TempDir();
+        var result = await LiveKvx.Cli(["describe", .. _kvx.ClientSettings, "--Kvx:DataDir=", "--Kvx:TokenFile="], psi =>
+        {
+            psi.Environment["XDG_DATA_HOME"] = Path.Combine(dir.Path, "data");
+            psi.Environment["XDG_RUNTIME_DIR"] = Path.Combine(dir.Path, "run");
+        });
+        Assert.True(result.ExitCode == 0, result.ToString());
+
+        using var json = JsonDocument.Parse(result.Stdout);
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var (data, token) =
+            OperatingSystem.IsWindows() ? (Path.Combine(Environment.GetEnvironmentVariable("LOCALAPPDATA")!, "kvx"), Path.Combine(Path.GetTempPath(), "kvx", "dev-token"))
+            : OperatingSystem.IsMacOS() ? (Path.Combine(home, "Library", "Application Support", "kvx"), Path.Combine(Path.GetTempPath(), "kvx", "dev-token"))
+            : (Path.Combine(dir.Path, "data", "kvx"), Path.Combine(dir.Path, "run", "kvx", "dev-token"));
+        Assert.Equal(data, json.RootElement.GetProperty("dataDir").GetString());
+        Assert.Equal(token, json.RootElement.GetProperty("tokenFile").GetString());
     }
 
     private static bool OnPath(string command) =>

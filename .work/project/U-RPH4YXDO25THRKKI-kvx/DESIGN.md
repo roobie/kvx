@@ -15,7 +15,7 @@ Developers need secrets locally, and the convenient stores keep them in plaintex
 - Not wire-compatible (sops+age, a custom config provider): solves encryption, but dev and prod code diverge.
 
 ## Settled (2026-10-23, with BR)
-- Auth, for now: one random dev token per login session, kept in `$XDG_RUNTIME_DIR` so it survives kvx restarts but not logout or reboot (BR, 2026-10-23). Restarts must not break running apps, which cache tokens in memory. Real Entra validation can come later.
+- Auth, for now: one random dev token per login session, kept in `$XDG_RUNTIME_DIR` so it survives kvx restarts but not logout or reboot (BR, 2026-10-23); on Windows and macOS, which clear nothing at logout, it lasts until reboot (BR, 2026-10-24). Restarts must not break running apps, which cache tokens in memory. Real Entra validation can come later.
 - Apps authenticate with an unmodified `DefaultAzureCredential`: kvx speaks the App Service managed-identity protocol, and the dev token doubles as IDENTITY_HEADER.
 - Host name: look real without `DisableChallengeResourceVerification`. The SDK only checks that the request host ends with the challenge resource's host, so kvx answers with resource `https://dev.localhost` and vaults live at `https://<vault>.dev.localhost`. No azure.net names are hijacked and no SDK option is needed.
 - TLS: Kestrel serves the ASP.NET Core dev cert, which .NET developers already have and trust and which covers `*.dev.localhost`; that is why the domain is `dev.localhost`. A configured certificate replaces it for another domain. The identity endpoint and kvx's own commands use a plain-http loopback listener, as Azure's identity endpoint does.

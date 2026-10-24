@@ -6,7 +6,7 @@ namespace Kvx.Server.Auth;
 
 /// <summary>
 /// One random bearer token per login session. It lives in a per-user runtime file (cleared at logout
-/// and reboot) and is reused when kvx restarts, because apps cache it in memory for as long as they run.
+/// and reboot on Linux; until reboot elsewhere) and is reused when kvx restarts, because apps cache it in memory for as long as they run.
 /// The same value is the IDENTITY_HEADER apps present to the identity endpoint.
 /// </summary>
 public sealed class DevTokens
@@ -26,6 +26,8 @@ public sealed class DevTokens
     public static string? Read(string file)
     {
         if (!File.Exists(file)) return null;
+        // The session ends at reboot even where nothing clears the file (Windows, macOS, a configured path).
+        if (MachineBoot.Time() is { } boot && File.GetLastWriteTimeUtc(file) < boot) return null;
         var token = File.ReadAllText(file).Trim();
         // Anything else is not ours to trust (truncated write, hand edit); replace it.
         return token.Length == 43 && token.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_') ? token : null;
