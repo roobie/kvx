@@ -46,6 +46,7 @@ Every slice done; the whole suite passes on all three OSes in CI. What remains n
 
 ## Next
 - A push mirror from gitea to GitHub (BR), until then pushed by hand with `GH_REPO_TOKEN_KVX`.
+- BR tests on a real Windows 11 machine (planned 2026-10-26); finalize the milestone after, folding findings in. Include `doctor` without the NRPT rule, whose fix text CI never shows.
 - Unverifiable in CI, for a real machine: NRPT on Home editions (research found no edition limit), Group Policy NRPT rules overriding local ones, ICS (SharedAccess) holding port 53 when Hyper-V, WSL or Docker run.
 
 ## Evidence
