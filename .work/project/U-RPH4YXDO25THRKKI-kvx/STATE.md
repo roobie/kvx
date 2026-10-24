@@ -20,7 +20,8 @@ Local development secrets (dotnet user-secrets and the like) sit unencrypted at 
 
 ## Scope
 In: the Key Vault secrets API; keyring-backed envelope encryption; a dotnet tool; importing user-secrets; Aspire hosting integration.
-Out (for now): the keys and certificates APIs; multi-user or networked deployment; managed HSM.
+Out: the full keys and certificates APIs, on purpose (BR, 2026-10-24): several times the conformance surface of secrets for a problem the audience mostly doesn't have, and a partial API that breaks on an unsupported algorithm would undercut "the SDK can't tell the difference". Two narrow uses may come in when an app needs them: B-LQBGCB5DTB7WQH3T, B-JI3BIJPQDTEBFPL3.
+Out (for now): multi-user or networked deployment; managed HSM.
 
 ## Context & constraints
 - Off-the-shelf survey (2026-10): wire-compatible emulators exist (calvinchengx Go emulator, AzureKeyVaultEmulator for .NET, Lowkey Vault), but they are test doubles with plaintext storage and fake auth. Keyring-backed tools (sops+age, 1Password `op run`) are not wire-compatible. The gap is the combination.
