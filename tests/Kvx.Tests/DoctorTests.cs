@@ -106,7 +106,10 @@ public sealed class DoctorTests : IAsyncLifetime
     [Fact]
     public async Task An_untrusted_certificate_fails()
     {
-        var result = await Doctor([.. NotServing(), .. _kvx.CertificateSettings], psi => psi.Environment.Remove("SSL_CERT_DIR"));
+        var pfx = Path.Combine(_kvx.Dir.Path, "untrusted.pfx");
+        LiveKvx.WriteCertificate(pfx, Path.Combine(_kvx.Dir.Path, "elsewhere"), LiveKvx.Domain,
+            DateTimeOffset.UtcNow.AddMinutes(-5), DateTimeOffset.UtcNow.AddDays(30), selfSigned: true);
+        var result = await Doctor([.. NotServing(), .. LiveKvx.Certificate(pfx)]);
 
         Assert.Equal(1, result.ExitCode);
         Assert.Contains("not trusted", Line(result, "certificate"));

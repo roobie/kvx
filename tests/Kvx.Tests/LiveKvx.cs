@@ -74,9 +74,24 @@ public sealed class LiveKvx : IAsyncDisposable
 
     private const string CertPassword = "test";
 
-    /// <summary>A self-signed server certificate for *.<paramref name="domain"/> as a .pfx, and its PEM in <paramref name="trustDir"/>.</summary>
-    public static void WriteCertificate(string pfx, string trustDir, string domain, DateTimeOffset notBefore, DateTimeOffset notAfter)
+    /// <summary>
+    /// The CA that CI trusts machine-wide, named by KVX_TEST_CA (a .pfx): on Windows and macOS trust lives only in the OS
+    /// store, which a test can't change without admin rights or a prompt. Unset, as on Linux, certificates are self-signed
+    /// and the trust directory is enough.
+    /// </summary>
+    private static readonly X509Certificate2? TestCa =
+        Environment.GetEnvironmentVariable("KVX_TEST_CA") is { Length: > 0 } path
+            ? X509CertificateLoader.LoadPkcs12FromFile(path, CertPassword)
+            : null;
+
+    /// <summary>
+    /// A server certificate for *.<paramref name="domain"/> as a .pfx, and its issuer's PEM in <paramref name="trustDir"/>.
+    /// Issued by the test CA when there is one, unless <paramref name="selfSigned"/>, which keeps it untrusted everywhere.
+    /// </summary>
+    public static void WriteCertificate(string pfx, string trustDir, string domain, DateTimeOffset notBefore, DateTimeOffset notAfter,
+        bool selfSigned = false)
     {
+        var issuer = selfSigned ? null : TestCa;
         using var key = RSA.Create(2048);
         var request = new CertificateRequest($"CN={domain}", key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
         var names = new SubjectAlternativeNameBuilder();
@@ -85,11 +100,15 @@ public sealed class LiveKvx : IAsyncDisposable
         request.CertificateExtensions.Add(names.Build());
         request.CertificateExtensions.Add(new X509BasicConstraintsExtension(false, false, 0, true));
         request.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension([new Oid("1.3.6.1.5.5.7.3.1")], false));
-        using var cert = request.CreateSelfSigned(notBefore, notAfter);
+        if (issuer is not null)
+            request.CertificateExtensions.Add(X509AuthorityKeyIdentifierExtension.CreateFromCertificate(issuer, true, false));
+        using var cert = issuer is null
+            ? request.CreateSelfSigned(notBefore, notAfter)
+            : request.Create(issuer, notBefore, notAfter, RandomNumberGenerator.GetBytes(16)).CopyWithPrivateKey(key);
 
         File.WriteAllBytes(pfx, cert.Export(X509ContentType.Pfx, CertPassword));
         Directory.CreateDirectory(trustDir);
-        File.WriteAllText(Path.Combine(trustDir, $"{Path.GetFileNameWithoutExtension(pfx)}.pem"), cert.ExportCertificatePem());
+        File.WriteAllText(Path.Combine(trustDir, $"{Path.GetFileNameWithoutExtension(pfx)}.pem"), (issuer ?? cert).ExportCertificatePem());
     }
 
     /// <summary>Runs `kvx args…` as its own process, the way a developer does.</summary>

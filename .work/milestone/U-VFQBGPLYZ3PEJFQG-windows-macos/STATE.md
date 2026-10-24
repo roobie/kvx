@@ -42,7 +42,7 @@ Out: signing or notarising the tool; installers beyond the dotnet tool; containe
 - CI trust: Windows imports the test certificate into LocalMachine\Root, macOS adds it with `sudo security add-trusted-cert` to the System keychain; directory trust (SSL_CERT_DIR) exists only on Linux. Linux CI pins `ubuntu-26.04` (systemd 259) until `ubuntu-latest` has moved to it.
 
 ## Now
-Slices os-key-protectors and os-paths-and-token done. Windows redirected output is now UTF-8 (the import `→`), checked locally; CI on the next push. Left: names and trust, which is the next slice.
+Slices os-key-protectors and os-paths-and-token done. Windows redirected output is UTF-8 (import passes on windows-latest, run 40047776738). Slice ci-test-trust: CI trusts a test CA so TLS tests run on Windows and macOS. After it: Windows names.
 
 ## Next
 - Then the DNS responder with NRPT setup, `doctor` (hosts fallback per vault) and README. The spike's responder (local branch `spike/windows-macos`, `spike/SpikeDns`) is the starting point.

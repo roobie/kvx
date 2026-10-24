@@ -44,6 +44,29 @@ jobs:
           curl --version | head -1
           curl -sS -m 5 -o /dev/null http://secrets.dev.localhost:9/ 2>&1 || true
 
+      # Windows and macOS keep trust only in the OS store, which a test can't write without admin rights or a prompt,
+      # so CI trusts one CA machine-wide and the tests issue their certificates from it (LiveKvx.TestCa).
+      - name: Trust a test CA
+        if: runner.os != 'Linux'
+        shell: pwsh
+        run: |
+          using namespace System.Security.Cryptography
+          using namespace System.Security.Cryptography.X509Certificates
+          $key = [RSA]::Create(2048)
+          $req = [CertificateRequest]::new('CN=kvx test CA', $key, [HashAlgorithmName]::SHA256, [RSASignaturePadding]::Pkcs1)
+          $req.CertificateExtensions.Add([X509BasicConstraintsExtension]::new($true, $false, 0, $true))
+          $req.CertificateExtensions.Add([X509KeyUsageExtension]::new([X509KeyUsageFlags]'KeyCertSign, CrlSign', $true))
+          $req.CertificateExtensions.Add([X509SubjectKeyIdentifierExtension]::new($req.PublicKey, $false))
+          # Back-dated so the tests can issue already-expired certificates under it.
+          $ca = $req.CreateSelfSigned([DateTimeOffset]::UtcNow.AddDays(-365), [DateTimeOffset]::UtcNow.AddDays(365))
+          $pfx = Join-Path $env:RUNNER_TEMP 'kvx-test-ca.pfx'
+          $cer = Join-Path $env:RUNNER_TEMP 'kvx-test-ca.cer'
+          [IO.File]::WriteAllBytes($pfx, $ca.Export([X509ContentType]::Pfx, 'test'))
+          [IO.File]::WriteAllBytes($cer, $ca.Export([X509ContentType]::Cert))
+          if ($IsWindows) { Import-Certificate -FilePath $cer -CertStoreLocation Cert:\LocalMachine\Root | Out-Null }
+          else { sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain $cer }
+          "KVX_TEST_CA=$pfx" >> $env:GITHUB_ENV
+
       - run: dotnet build Kvx.slnx -c Release
 
       - name: Test
