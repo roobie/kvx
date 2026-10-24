@@ -42,10 +42,9 @@ Out: signing or notarising the tool; installers beyond the dotnet tool; containe
 - CI trust: Windows imports the test certificate into LocalMachine\Root, macOS adds it with `sudo security add-trusted-cert` to the System keychain; directory trust (SSL_CERT_DIR) exists only on Linux. Linux CI pins `ubuntu-26.04` (systemd 259) until `ubuntu-latest` has moved to it.
 
 ## Now
-Slices os-key-protectors and os-paths-and-token done. Windows redirected output is UTF-8 (import passes on windows-latest, run 40047776738). Slice ci-test-trust: CI trusts a test CA so TLS tests run on Windows and macOS. After it: Windows names.
+Slices os-key-protectors, os-paths-and-token and ci-test-trust done; macOS passes the whole suite. Slice windows-names: the loopback DNS responder, its NRPT rule in CI, `doctor` and the README.
 
 ## Next
-- Then the DNS responder with NRPT setup, `doctor` (hosts fallback per vault) and README. The spike's responder (local branch `spike/windows-macos`, `spike/SpikeDns`) is the starting point.
 - A push mirror from gitea to GitHub (BR), until then pushed by hand with `GH_REPO_TOKEN_KVX`.
 - Unverifiable in CI, for a real machine: NRPT on Home editions (research found no edition limit), Group Policy NRPT rules overriding local ones, ICS (SharedAccess) holding port 53 when Hyper-V, WSL or Docker run.
 
@@ -61,6 +60,7 @@ Slices os-key-protectors and os-paths-and-token done. Windows redirected output 
 - CI run 40038676413 (2026-10-24, main at 82aeb89): the full suite passes on ubuntu-26.04; Windows and macOS still fail on the missing protectors.
 - CI run 40045700073 (2026-10-24, 80b14ea): protectors work on both; Windows 44/54, macOS 45/54 (run 40044774152), remaining failures are names, trust, token location and the items in Next.
 - CI runs 40046335711 and 40047566862 (de4a0d7, 34e3c4a): per-OS defaults and the reboot rule pass; Windows 48/56, macOS 49/56, Linux 56/56. Every remaining failure is name resolution or certificate trust, plus the Windows import arrow.
+- CI run 40048209042 (f31ea1e): macos-latest and ubuntu-26.04 pass the whole suite; windows-latest 49/56, every failure "No such host is known".
 
 ## Harvest
 - [ ] learning: stock Windows does not resolve `*.localhost` subdomains for .NET, while macOS and systemd-resolved Linux do; curl resolves them itself everywhere
@@ -85,3 +85,4 @@ Slices os-key-protectors and os-paths-and-token done. Windows redirected output 
 - 2026-10-24 slice os-key-protectors closed
 - 2026-10-24 the `kvx run` tests' `sh` and `touch` pass on windows-latest (Git for Windows puts them on PATH); a Windows developer without Git would see them fail, accepted for a .NET audience
 - 2026-10-24 slice os-paths-and-token closed
+- 2026-10-24 slice ci-test-trust closed
