@@ -102,6 +102,8 @@ public sealed class LiveKvx : IAsyncDisposable
         {
             RedirectStandardError = true,
             RedirectStandardOutput = true,
+            StandardOutputEncoding = System.Text.Encoding.UTF8,   // what kvx writes to a pipe on every OS
+            StandardErrorEncoding = System.Text.Encoding.UTF8,
             UseShellExecute = false,
         };
         foreach (var a in args) psi.ArgumentList.Add(a);

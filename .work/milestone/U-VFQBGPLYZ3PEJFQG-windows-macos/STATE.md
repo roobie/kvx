@@ -38,15 +38,13 @@ Out: signing or notarising the tool; installers beyond the dotnet tool; containe
 - macOS item access (BR chose 2026-10-24): the item trusts any application of the user, not only the creating binary. The spike showed a read from another binary (what every tool update is) blocks on an invisible prompt rather than failing; per-app trust would buy nothing anyway, since DPAPI and `systemd-creds --user` already let any process of the user unwrap. A locked keychain must fail rather than wait on a prompt: `security` can't turn interaction off, so each call has a timeout and `doctor` names `security unlock-keychain`.
 - Hosts-file fallback (BR, 2026-10-24): where port 53 or NRPT can't be used (port taken by ICS, Group Policy NRPT, no admin), a line per vault in the OS hosts file (`/etc/hosts`, `%SystemRoot%\System32\drivers\etc\hosts`) stays a supported way. `doctor` names that file in its fix and must not report FAIL for a hosts-file user just because its probe name `kvx-doctor.<domain>` has no line: it checks the existing vaults' names.
 - Windows protector: DPAPI, CurrentUser. Caveat for the README: an admin password reset of a local account loses the store.
-- Defaults (BR accepted 2026-10-24): data dir `%LOCALAPPDATA%\kvx` and `~/Library/Application Support/kvx`; token in the per-user temp dir, replaced when the machine has rebooted since it was written (weaker than Linux, which also drops it at logout).
+- Defaults (BR accepted 2026-10-24): data dir `%LOCALAPPDATA%\kvx` and `~/Library/Application Support/kvx`; token in the per-user temp dir (Windows) or user cache dir (macOS, whose temp dir purges files unread for days), replaced when the machine has rebooted since it was written (weaker than Linux, which also drops it at logout).
 - CI trust: Windows imports the test certificate into LocalMachine\Root, macOS adds it with `sudo security add-trusted-cert` to the System keychain; directory trust (SSL_CERT_DIR) exists only on Linux. Linux CI pins `ubuntu-26.04` (systemd 259) until `ubuntu-latest` has moved to it.
 
 ## Now
-Slice os-key-protectors done: DPAPI and the keychain protect the store in CI. Next slice: per-OS paths and token.
+Slice os-paths-and-token: green on all OSes, waiting on the macOS cache-dir run before finalize. Windows redirected output is now UTF-8 (the import `→`), checked locally; CI next push.
 
 ## Next
-- Per-OS paths and token (Describe fails on both OSes for want of a default token file).
-- Windows console output: redirected stdout is not UTF-8, so `→` in `kvx import` output is lost (CliTests Import on windows-latest).
 - Tests that assert Linux facts: `sh`/`touch` as the child app, SSL_CERT_DIR and `:` path lists in `kvx run` (Run_sets_the_identity…).
 - Then the DNS responder with NRPT setup, `doctor` (hosts fallback per vault) and README. The spike's responder (local branch `spike/windows-macos`, `spike/SpikeDns`) is the starting point.
 - A push mirror from gitea to GitHub (BR), until then pushed by hand with `GH_REPO_TOKEN_KVX`.

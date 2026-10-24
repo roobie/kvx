@@ -9,8 +9,24 @@ namespace Kvx.Server.Cli;
 /// </summary>
 public static class KvxCli
 {
+    /// <summary>
+    /// Windows encodes redirected output in the console's legacy code page, which has no `→`, so pipes and files get
+    /// UTF-8 as they do from git and gh. A console window is left alone: it already takes Unicode, and changing its code
+    /// page would outlive kvx in the user's terminal.
+    /// </summary>
+    private static void Utf8WhenRedirected()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        var utf8 = new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
+        if (Console.IsOutputRedirected)
+            Console.SetOut(new StreamWriter(Console.OpenStandardOutput(), utf8) { AutoFlush = true });
+        if (Console.IsErrorRedirected)
+            Console.SetError(new StreamWriter(Console.OpenStandardError(), utf8) { AutoFlush = true });
+    }
+
     public static async Task<int> Dispatch(string[] args)
     {
+        Utf8WhenRedirected();
         var verb = args.Length > 0 ? args[0] : "";
         var rest = args.Skip(1).ToArray();
         switch (verb)
