@@ -42,7 +42,7 @@ Out: signing or notarising the tool; installers beyond the dotnet tool; containe
 - CI trust: Windows imports the test certificate into LocalMachine\Root, macOS adds it with `sudo security add-trusted-cert` to the System keychain; directory trust (SSL_CERT_DIR) exists only on Linux. Linux CI pins `ubuntu-26.04` (systemd 259) until `ubuntu-latest` has moved to it.
 
 ## Now
-Slices os-key-protectors, os-paths-and-token and ci-test-trust done; macOS passes the whole suite. Slice windows-names: the loopback DNS responder, its NRPT rule in CI, `doctor` and the README.
+Every slice done; the whole suite passes on all three OSes in CI. What remains needs a real machine or BR (Next), then the milestone's finalize.
 
 ## Next
 - A push mirror from gitea to GitHub (BR), until then pushed by hand with `GH_REPO_TOKEN_KVX`.
@@ -61,6 +61,7 @@ Slices os-key-protectors, os-paths-and-token and ci-test-trust done; macOS passe
 - CI run 40045700073 (2026-10-24, 80b14ea): protectors work on both; Windows 44/54, macOS 45/54 (run 40044774152), remaining failures are names, trust, token location and the items in Next.
 - CI runs 40046335711 and 40047566862 (de4a0d7, 34e3c4a): per-OS defaults and the reboot rule pass; Windows 48/56, macOS 49/56, Linux 56/56. Every remaining failure is name resolution or certificate trust, plus the Windows import arrow.
 - CI run 40048209042 (f31ea1e): macos-latest and ubuntu-26.04 pass the whole suite; windows-latest 49/56, every failure "No such host is known".
+- CI run 40050507739 (0bf02bf): windows-latest, macos-latest and ubuntu-26.04 each 66/66, Windows with the `.localhost` NRPT rule and kvx's responder.
 
 ## Harvest
 - [ ] learning: stock Windows does not resolve `*.localhost` subdomains for .NET, while macOS and systemd-resolved Linux do; curl resolves them itself everywhere
@@ -86,3 +87,4 @@ Slices os-key-protectors, os-paths-and-token and ci-test-trust done; macOS passe
 - 2026-10-24 the `kvx run` tests' `sh` and `touch` pass on windows-latest (Git for Windows puts them on PATH); a Windows developer without Git would see them fail, accepted for a .NET audience
 - 2026-10-24 slice os-paths-and-token closed
 - 2026-10-24 slice ci-test-trust closed
+- 2026-10-24 slice windows-names closed; its CI work also found and removed a Kestrel startup deadlock on every OS (L-EFA6TVY3SAIWZCD5)
