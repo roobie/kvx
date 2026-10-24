@@ -35,17 +35,20 @@ Out: signing or notarising the tool; installers beyond the dotnet tool; containe
 - Windows names: BR chose (2026-10-23) a one-time elevated setup, like `dev-certs --trust`: a Windows NRPT rule sends `.dev.localhost` to a loopback DNS responder in kvx that answers every name under the domain with loopback. Vaults then appear on first write as elsewhere. `kvx doctor` detects the missing rule and prints the setup command. Waiting for .NET 11 was rejected: its `*.localhost` fallback (dotnet/runtime#123076) is not in .NET 10, and most of the audience's apps are on .NET 8/10.
 - Windows rule namespace (BR chose 2026-10-24): `.localhost` rather than `.dev.localhost`. It is what RFC 6761 asks of a resolver anyway, it covers the tests' `kvxtest.localhost` and any custom vault domain, and plain `localhost` keeps resolving. The cost: while the rule exists, every `*.localhost` name on the machine needs kvx running.
 - macOS protector: a generic password in the file-based login keychain holding a key-encryption key, not MSAL Extensions (same keychain, same prompts, plus a dependency). Made and read through Apple's `security` tool with the key on stdin, not through own Security.framework calls: CI showed an item made by one binary refused to another (-25293) despite an any-app ACL, because items are also bound to the creator's code partition, and kvx's ad-hoc-signed apphost gets a new one with every build. Through `security` every caller shares Apple's tool partition.
-- macOS item access (BR chose 2026-10-24): the item trusts any application of the user, not only the creating binary. The spike showed a read from another binary (what every tool update is) blocks on an invisible prompt rather than failing; per-app trust would buy nothing anyway, since DPAPI and `systemd-creds --user` already let any process of the user unwrap. User interaction is turned off so a locked keychain fails fast with errSecInteractionNotAllowed, which `doctor` explains.
+- macOS item access (BR chose 2026-10-24): the item trusts any application of the user, not only the creating binary. The spike showed a read from another binary (what every tool update is) blocks on an invisible prompt rather than failing; per-app trust would buy nothing anyway, since DPAPI and `systemd-creds --user` already let any process of the user unwrap. A locked keychain must fail rather than wait on a prompt: `security` can't turn interaction off, so each call has a timeout and `doctor` names `security unlock-keychain`.
 - Hosts-file fallback (BR, 2026-10-24): where port 53 or NRPT can't be used (port taken by ICS, Group Policy NRPT, no admin), a line per vault in the OS hosts file (`/etc/hosts`, `%SystemRoot%\System32\drivers\etc\hosts`) stays a supported way. `doctor` names that file in its fix and must not report FAIL for a hosts-file user just because its probe name `kvx-doctor.<domain>` has no line: it checks the existing vaults' names.
 - Windows protector: DPAPI, CurrentUser. Caveat for the README: an admin password reset of a local account loses the store.
 - Defaults (BR accepted 2026-10-24): data dir `%LOCALAPPDATA%\kvx` and `~/Library/Application Support/kvx`; token in the per-user temp dir, replaced when the machine has rebooted since it was written (weaker than Linux, which also drops it at logout).
 - CI trust: Windows imports the test certificate into LocalMachine\Root, macOS adds it with `sudo security add-trusted-cert` to the System keychain; directory trust (SSL_CERT_DIR) exists only on Linux. Linux CI pins `ubuntu-26.04` (systemd 259) until `ubuntu-latest` has moved to it.
 
 ## Now
-Slice os-key-protectors (U-6QK5LH57XTDAZJ36) executing.
+Slice os-key-protectors done: DPAPI and the keychain protect the store in CI. Next slice: per-OS paths and token.
 
 ## Next
-- Per-OS paths and token, then the DNS responder with NRPT setup, `doctor` (hosts fallback per vault) and README. The spike's responder (local branch `spike/windows-macos`, `spike/SpikeDns`) is the starting point.
+- Per-OS paths and token (Describe fails on both OSes for want of a default token file).
+- Windows console output: redirected stdout is not UTF-8, so `→` in `kvx import` output is lost (CliTests Import on windows-latest).
+- Tests that assert Linux facts: `sh`/`touch` as the child app, SSL_CERT_DIR and `:` path lists in `kvx run` (Run_sets_the_identity…).
+- Then the DNS responder with NRPT setup, `doctor` (hosts fallback per vault) and README. The spike's responder (local branch `spike/windows-macos`, `spike/SpikeDns`) is the starting point.
 - A push mirror from gitea to GitHub (BR), until then pushed by hand with `GH_REPO_TOKEN_KVX`.
 - Unverifiable in CI, for a real machine: NRPT on Home editions (research found no edition limit), Group Policy NRPT rules overriding local ones, ICS (SharedAccess) holding port 53 when Hyper-V, WSL or Docker run.
 
@@ -59,6 +62,7 @@ Slice os-key-protectors (U-6QK5LH57XTDAZJ36) executing.
   - macOS 26.6: a generic-password add and read round trip works in the unlocked login keychain. A read from a second binary and a read after `security lock-keychain` both **hang** (killed at 2 min) instead of returning an error.
   - Ubuntu 26.04: systemd 259, `systemd-creds.socket` active, `systemd-creds --user` round trips as the runner user; 51/53 tests passed, the 2 failures fixed in b0f880d.
 - CI run 40038676413 (2026-10-24, main at 82aeb89): the full suite passes on ubuntu-26.04; Windows and macOS still fail on the missing protectors.
+- CI run 40045700073 (2026-10-24, 80b14ea): protectors work on both; Windows 44/54, macOS 45/54 (run 40044774152), remaining failures are names, trust, token location and the items in Next.
 
 ## Harvest
 - [ ] learning: stock Windows does not resolve `*.localhost` subdomains for .NET, while macOS and systemd-resolved Linux do; curl resolves them itself everywhere
@@ -80,3 +84,4 @@ Slice os-key-protectors (U-6QK5LH57XTDAZJ36) executing.
 - 2026-10-24 BR accepted the data dir and token defaults; second spike answered NRPT, port 53, the login keychain and systemd on runners
 - 2026-10-23 phase initialize → execute
 - 2026-10-24 BR: the hosts file stays a supported fallback where port 53 doesn't work; slice os-key-protectors started
+- 2026-10-24 slice os-key-protectors closed
