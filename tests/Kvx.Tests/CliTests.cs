@@ -222,7 +222,9 @@ public sealed class CliTests : IAsyncLifetime
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         var (data, token) =
             OperatingSystem.IsWindows() ? (Path.Combine(Environment.GetEnvironmentVariable("LOCALAPPDATA")!, "kvx"), Path.Combine(Path.GetTempPath(), "kvx", "dev-token"))
-            : OperatingSystem.IsMacOS() ? (Path.Combine(home, "Library", "Application Support", "kvx"), Path.Combine(Path.GetTempPath(), "kvx", "dev-token"))
+            // the cache dir is the temp dir's sibling: /var/folders/…/T/ and /var/folders/…/C/
+            : OperatingSystem.IsMacOS() ? (Path.Combine(home, "Library", "Application Support", "kvx"),
+                Path.Combine(Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(Path.GetTempPath()))!, "C", "kvx", "dev-token"))
             : (Path.Combine(dir.Path, "data", "kvx"), Path.Combine(dir.Path, "run", "kvx", "dev-token"));
         Assert.Equal(data, json.RootElement.GetProperty("dataDir").GetString());
         Assert.Equal(token, json.RootElement.GetProperty("tokenFile").GetString());

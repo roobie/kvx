@@ -19,7 +19,7 @@ public sealed class KvxOptions
     /// <summary>Empty means the user's local app data: $XDG_DATA_HOME/kvx, %LOCALAPPDATA%\kvx, ~/Library/Application Support/kvx.</summary>
     public string DataDir { get; set; } = "";
 
-    /// <summary>Empty means $XDG_RUNTIME_DIR/kvx/dev-token on Linux, kvx/dev-token in the user's temp dir elsewhere.</summary>
+    /// <summary>Empty means kvx/dev-token in $XDG_RUNTIME_DIR on Linux, the user's temp dir on Windows, the user cache dir (/var/folders/…/C) on macOS.</summary>
     public string TokenFile { get; set; } = "";
 
     /// <summary>
@@ -57,9 +57,13 @@ public sealed class KvxOptions
     public string ResolveTokenFile()
     {
         if (!string.IsNullOrEmpty(TokenFile)) return TokenFile;
-        // Windows and macOS have no per-user directory cleared at logout; the temp dir is private to the user, and
-        // DevTokens drops a token older than the last boot.
-        if (!OperatingSystem.IsLinux()) return Path.Combine(Path.GetTempPath(), "kvx", "dev-token");
+        // Windows and macOS have no per-user directory cleared at logout; these are private to the user, and
+        // DevTokens drops a token older than the last boot. Not macOS's temp dir: it purges files unread for days,
+        // which would strand the clients of an idle kvx.
+        if (OperatingSystem.IsMacOS())
+            return Path.Combine(MacUserDirs.Cache() ?? throw new InvalidOperationException(
+                "macOS did not name the user cache dir; configure Kvx:TokenFile."), "kvx", "dev-token");
+        if (OperatingSystem.IsWindows()) return Path.Combine(Path.GetTempPath(), "kvx", "dev-token");
         var runtime = Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR");
         if (string.IsNullOrEmpty(runtime))
             throw new InvalidOperationException(
