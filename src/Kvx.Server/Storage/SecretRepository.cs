@@ -215,6 +215,32 @@ public sealed class SecretRepository
         }
     }
 
+    public ServicePrincipal? Principal
+    {
+        get { lock (_lock) return _doc.Principal; }
+    }
+
+    public ServicePrincipal SetPrincipal(string tenantId, string clientId, string secret)
+    {
+        lock (_lock)
+        {
+            _doc.Principal = new ServicePrincipal(tenantId, clientId, secret, Now);
+            Persist();
+            return _doc.Principal;
+        }
+    }
+
+    public bool ClearPrincipal()
+    {
+        lock (_lock)
+        {
+            if (_doc.Principal is null) return false;
+            _doc.Principal = null;
+            Persist();
+            return true;
+        }
+    }
+
     // --- helpers; callers hold the lock ---
 
     private VaultDocument? Vault(string vault, bool create = false)

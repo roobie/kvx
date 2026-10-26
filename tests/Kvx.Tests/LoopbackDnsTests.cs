@@ -121,6 +121,6 @@ public sealed class LoopbackDnsTests
     {
         Assert.Equal(OperatingSystem.IsWindows() ? new IPEndPoint(IPAddress.Loopback, 53) : null, new KvxOptions().ResolveDns());
         Assert.Null(new KvxOptions { Dns = "off" }.ResolveDns());
-        Assert.Contains("Kvx:Dns", Assert.Throws<InvalidOperationException>(() => new KvxOptions { Dns = "port 53" }.ResolveDns()).Message);
+        Assert.Contains("Kvx:Dns", Assert.Throws<ConfigurationException>(() => new KvxOptions { Dns = "port 53" }.ResolveDns()).Message);
     }
 }

@@ -11,7 +11,12 @@ public sealed class StoreDocument
 
     [JsonObjectCreationHandling(JsonObjectCreationHandling.Populate)]
     public Dictionary<string, VaultDocument> Vaults { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Passthrough's service principal; outside <see cref="Vaults"/> so the vault API never serves it.</summary>
+    public ServicePrincipal? Principal { get; set; }
 }
+
+public sealed record ServicePrincipal(string TenantId, string ClientId, string Secret, long Updated);
 
 public sealed class VaultDocument
 {

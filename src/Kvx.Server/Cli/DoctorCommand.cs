@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Net;
+using System.Net.Http.Json;
 using System.Net.Sockets;
 using System.Security.Authentication;
 using System.Security.Cryptography;
@@ -40,6 +41,7 @@ public static class DoctorCommand
             Certificate(config, host, options.Domain),
             KeyProtector(options),
             .. serving,
+            .. await Principal(args, options),
         ];
 
         foreach (var f in findings)
@@ -207,6 +209,37 @@ public static class DoctorCommand
         var (client, error) = await KvxClient.Connect(args);
         if (client is null) return [new(Status.Warn, "serving", error!)];
         return [new(Status.Ok, "serving", $"kvx answers at {client.Endpoint}"), await Handshake(urls, host)];
+    }
+
+    /// <summary>
+    /// With ServicePrincipal passthrough, whether a principal is stored and signs in. A token for Azure Resource Manager
+    /// proves the sign-in without needing any role assignment. Checked only against a serving kvx, which holds the store.
+    /// </summary>
+    private static async Task<IEnumerable<Finding>> Principal(string[] args, KvxOptions options)
+    {
+        const string check = "principal";
+        if (!options.Passthrough.Trim().Equals(Auth.Upstream.ServicePrincipal, StringComparison.OrdinalIgnoreCase)) return [];
+        var (client, _) = await KvxClient.Connect(args);
+        if (client is null) return [];
+
+        using var http = client.Http();
+        var stored = new HttpRequestMessage(HttpMethod.Get, Api.PrincipalApi.Path.TrimStart('/'));
+        stored.Headers.Authorization = client.Bearer;
+        using var storedResponse = await http.SendAsync(stored);
+        if (storedResponse.StatusCode == HttpStatusCode.NotFound)
+            return [new(Status.Fail, check, "Kvx:Passthrough is ServicePrincipal, but no service principal is set",
+                "`kvx principal set --tenant <tenant id> --client-id <client id>`, with the client secret on stdin")];
+        var view = await storedResponse.Content.ReadFromJsonAsync<Api.PrincipalView>();
+        var who = $"service principal {view!.ClientId} in tenant {view.TenantId}";
+
+        var token = new HttpRequestMessage(HttpMethod.Get,
+            $"{client.IdentityEndpoint}?api-version=2019-08-01&resource={Uri.EscapeDataString("https://management.azure.com")}");
+        token.Headers.Add("X-IDENTITY-HEADER", client.Token);
+        using var tokenResponse = await http.SendAsync(token);
+        if (tokenResponse.IsSuccessStatusCode) return [new(Status.Ok, check, $"{who} signs in")];
+        var error = await tokenResponse.Content.ReadFromJsonAsync<Api.ErrorEnvelope>();
+        return [new(Status.Fail, check, error?.Error.Message ?? $"{who}: {(int)tokenResponse.StatusCode}",
+            "check the tenant, client id and secret against the app registration in Entra; `kvx principal set` replaces them")];
     }
 
     /// <summary>

@@ -16,8 +16,12 @@ namespace Kvx.Tests;
 /// It serves its own certificate for its own domain, so tests neither need nor touch the machine's dev cert,
 /// and that certificate sits in the trust directory `kvx run` passes on, as `dotnet dev-certs https --trust` would.
 /// </summary>
-public sealed class LiveKvx : IAsyncDisposable
+public sealed class LiveKvx(string[]? settings = null, Action<IServiceCollection>? services = null) : IAsyncDisposable
 {
+    /// <summary>A kvx whose passthrough signs in as a service principal through <see cref="FakePrincipal"/>.</summary>
+    public static LiveKvx WithPrincipalPassthrough() =>
+        new([$"--Kvx:Passthrough={Kvx.Server.Auth.Upstream.ServicePrincipal}"], FakePrincipal.Register);
+
     public const string Domain = "kvxtest.localhost";
 
     public TempDir Dir { get; } = new();
@@ -37,6 +41,7 @@ public sealed class LiveKvx : IAsyncDisposable
         $"--Kvx:Domain={Domain}",
         $"--Kvx:DevCertTrustDir={TrustDir}",
         "--Kvx:Dns=off",   // the run's one responder answers instead; see Names
+        .. settings ?? [],
     ];
 
     public string VaultUri(string vault) => $"https://{vault}.{Domain}:{HttpsPort}";
@@ -75,7 +80,11 @@ public sealed class LiveKvx : IAsyncDisposable
     {
         await NamesResolve();
         PrepareCertificate();
-        _app = KvxApp.Build(ServerSettings, b => b.Services.AddSingleton(FakeLogin.Upstream));
+        _app = KvxApp.Build(ServerSettings, b =>
+        {
+            b.Services.AddSingleton(FakeLogin.Upstream);
+            services?.Invoke(b.Services);
+        });
         await _app.StartAsync();
     }
 
@@ -135,10 +144,11 @@ public sealed class LiveKvx : IAsyncDisposable
     }
 
     /// <summary>Runs `kvx args…` as its own process, the way a developer does.</summary>
-    public static Task<Result> Cli(IEnumerable<string> args, Action<ProcessStartInfo>? configure = null) =>
-        Run("dotnet", [Path.Combine(AppContext.BaseDirectory, "Kvx.Server.dll"), .. args], configure);
+    public static Task<Result> Cli(IEnumerable<string> args, Action<ProcessStartInfo>? configure = null, string? stdin = null) =>
+        Run("dotnet", [Path.Combine(AppContext.BaseDirectory, "Kvx.Server.dll"), .. args], configure, stdin);
 
-    public static async Task<Result> Run(string file, IEnumerable<string> args, Action<ProcessStartInfo>? configure = null)
+    public static async Task<Result> Run(string file, IEnumerable<string> args, Action<ProcessStartInfo>? configure = null,
+        string? stdin = null)
     {
         var psi = new ProcessStartInfo(file)
         {
@@ -147,10 +157,16 @@ public sealed class LiveKvx : IAsyncDisposable
             StandardOutputEncoding = System.Text.Encoding.UTF8,   // what kvx writes to a pipe on every OS
             StandardErrorEncoding = System.Text.Encoding.UTF8,
             UseShellExecute = false,
+            RedirectStandardInput = stdin is not null,
         };
         foreach (var a in args) psi.ArgumentList.Add(a);
         configure?.Invoke(psi);
         using var p = Process.Start(psi)!;
+        if (stdin is not null)
+        {
+            await p.StandardInput.WriteAsync(stdin);
+            p.StandardInput.Close();
+        }
         var stdout = p.StandardOutput.ReadToEndAsync();
         var stderr = p.StandardError.ReadToEndAsync();
         // A command that should exit but serves instead would otherwise hold the whole run until CI kills it.

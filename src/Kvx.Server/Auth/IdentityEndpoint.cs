@@ -9,7 +9,7 @@ public sealed record IdentityToken(string AccessToken, long ExpiresOn, string Re
 
 /// <summary>
 /// The App Service managed-identity protocol, so an unmodified DefaultAzureCredential gets tokens from
-/// IDENTITY_ENDPOINT and IDENTITY_HEADER alone: kvx's own token for kvx, the developer's login for anything else.
+/// IDENTITY_ENDPOINT and IDENTITY_HEADER alone: kvx's own token for kvx, the <see cref="Upstream"/> for anything else.
 /// Errors are 400/401 only: the client retries 404, 408, 429 and 5xx.
 /// </summary>
 public static class IdentityEndpoint
@@ -53,15 +53,14 @@ public static class IdentityEndpoint
         try
         {
             var token = await upstream.Credential.GetTokenAsync(new TokenRequestContext([resource + "/.default"]), ct);
-            log.LogInformation("Passed a token request for {Resource} through to the developer's login.", resource);
+            log.LogInformation("Passed a token request for {Resource} through to {From}.", resource, upstream.From);
             return Issue(token.Token, token.ExpiresOn, resource);
         }
         catch (Exception e) when (e is CredentialUnavailableException or AuthenticationFailedException)
         {
             log.LogWarning("Could not pass through a token for {Resource}: {Reason}", resource, e.Message);
             return Errors.Result(400, "BadParameter",
-                $"kvx could not get a token for '{resource}' from your own Azure login. Sign in with {upstream.Description} " +
-                $"and retry. Details: {e.Message}");
+                $"kvx could not get a token for '{resource}' from {upstream.From}. {upstream.Fix} Details: {e.Message}");
         }
     }
 

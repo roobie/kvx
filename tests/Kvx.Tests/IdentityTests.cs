@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using Kvx.Server;
 using Kvx.Server.Auth;
 
 namespace Kvx.Tests;
@@ -69,7 +70,7 @@ public sealed class IdentityTests : IDisposable
     [Fact]
     public async Task Without_a_developer_login_other_resources_are_400_saying_how_to_sign_in()
     {
-        using var kvx = new KvxHost(_dir, upstream: new Upstream(new NoLogin(), "`az login`"));
+        using var kvx = new KvxHost(_dir, upstream: Upstream.FromConfig("AzureCli") with { Credential = new NoLogin() });
         var response = await kvx.CreateClient().SendAsync(TokenRequest(kvx.Token, "https://storage.azure.com"));
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -95,7 +96,16 @@ public sealed class IdentityTests : IDisposable
     {
         Assert.Null(Upstream.FromConfig(" ").Credential);
         Assert.NotNull(Upstream.FromConfig("AzureCli, AzureDeveloperCli").Credential);
-        Assert.Contains("Nope", Assert.Throws<InvalidOperationException>(() => Upstream.FromConfig("AzureCli,Nope")).Message);
+        Assert.Contains("Nope", Assert.Throws<ConfigurationException>(() => Upstream.FromConfig("AzureCli,Nope")).Message);
+    }
+
+    [Fact]
+    public void The_service_principal_is_the_only_passthrough_source_when_listed()
+    {
+        var message = Assert.Throws<ConfigurationException>(() =>
+            Upstream.FromConfig("ServicePrincipal, AzureCli", () => new FakeLogin())).Message;
+        Assert.Contains("AzureCli", message);
+        Assert.Contains("only entry", message);
     }
 
     [Fact]
