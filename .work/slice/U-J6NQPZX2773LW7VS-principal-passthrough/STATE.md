@@ -32,14 +32,14 @@ Out (BR, 2026-10-26): certificates; several principals or a choice per app; mixi
 - Threat model unchanged: same-user processes are trusted. The new exposure is persistence: a long-lived secret on the machine, encrypted at rest.
 
 ## Now
-Code and tests done (store, PrincipalCredential, `/kvx/principal`, `kvx principal`, doctor check). README next.
+Code, tests and README done. Waiting on BR for the live check.
 
 ## Next
-- README: warning and a principal section (Entra setup, long-lived credential risk).
-- Live check with a real principal in BR's tenant, or BR waives it.
+- Live check with a real principal in BR's tenant, or BR waives it; then finalize.
 
 ## Evidence
 - 2026-10-26, 81/81 tests on Linux. PrincipalTests: stored principal serves non-kvx tokens while kvx keeps its own (criterion 1); a re-set principal applies on the next request (2); `ServicePrincipal,AzureCli` makes `kvx serve` exit 1 with a message and no stack trace (3); no principal / bad secret → 400 naming client id, tenant, AADSTS code and `kvx principal set` (4). The secret is absent from PUT/GET responses, `kvx principal show` output and every file in the data dir after a restart (5). PrincipalCliTests: `kvx principal set` reads stdin, `show` / `clear` work; doctor reports ok, missing (with the set command) and failing sign-in (4).
+- README: new "Pass through as a service principal" section (setup, Entra needs, long-lived credential warning); the top warning now says "by default" and links it (6).
 
 ## Harvest
 - [ ] decision: ServicePrincipal is the only passthrough source when listed, so a broken principal never falls back to acting as the developer

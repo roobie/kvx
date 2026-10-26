@@ -3,7 +3,7 @@
 A local, encrypted-at-rest stand-in for Azure Key Vault secrets, so development secrets stop living in plaintext.
 
 > [!WARNING]
-> **An app pointed at kvx through `DefaultAzureCredential` gets *all* its Azure tokens through kvx — and reaches every other Azure service as *you*, only if you are signed in.**
+> **An app pointed at kvx through `DefaultAzureCredential` gets *all* its Azure tokens through kvx — and by default reaches every other Azure service as *you*, only if you are signed in.**
 >
 > `DefaultAzureCredential` keeps using the first credential that works. Once the app has a token from kvx, every Azure client in that process (Storage, Service Bus, Cosmos DB, ARM, …) asks kvx for its token too. kvx answers Key Vault itself and passes every other request through to your own login:
 >
@@ -11,7 +11,7 @@ A local, encrypted-at-rest stand-in for Azure Key Vault secrets, so development 
 > - **The app acts as you, not as its managed identity.** It sees your role assignments, your default tenant and your subscriptions, so access that works locally may still fail in production, and the reverse.
 > - **Anything holding the session token can get your Azure tokens from kvx.** That is the same reach as running `az account get-access-token` yourself, since the token file is readable only by you.
 >
-> Set `Kvx:Passthrough` to an empty string to turn passthrough off. Apps then reach only Key Vault through kvx.
+> Set `Kvx:Passthrough` to an empty string to turn passthrough off. Apps then reach only Key Vault through kvx. To have apps act as a scoped, non-human identity instead of you, [pass through as a service principal](#pass-through-as-a-service-principal).
 
 ## Install
 
@@ -74,6 +74,28 @@ kvx env --shell pwsh | Invoke-Expression
 ```
 
 The token is per login session, so these values stay valid across kvx restarts until you log out.
+
+## Pass through as a service principal
+
+With `Kvx:Passthrough` set to `ServicePrincipal`, kvx gets tokens for other Azure services by signing in as a service principal, not as you. The app then sees that principal's role assignments, which you can make match what its managed identity has in production. Key Vault still gets kvx's own token.
+
+```sh
+kvx --Kvx:Passthrough=ServicePrincipal          # or set it in appsettings.json
+kvx principal set --tenant <tenant id> --client-id <application id>   # asks for the client secret
+kvx doctor                                       # checks that the principal signs in
+```
+
+`kvx principal set` reads the secret from stdin (piped, or typed without echo), so it stays out of shell history. kvx keeps it in its encrypted store, under the same key as your vaults, and never returns it: `kvx principal show` prints only the tenant and client id. A new principal applies to the next token request, with no restart. `ServicePrincipal` must be the only entry in `Kvx:Passthrough`, so an app never falls back to acting as you when the principal fails. A principal that is missing or cannot sign in gives the app an error naming it and the Entra error code.
+
+In Entra this needs:
+
+- **An app registration**, preferably one per developer, so no secret is shared.
+- **A client secret** with a short expiry. Certificates and federated credentials are not supported.
+- **Role assignments** on the resources the app uses, the same ones production's managed identity has, and no more. They replace your own access for the app.
+- **A check of tenant policy.** Some tenants restrict service-principal sign-in by location or forbid client secrets. The error then shows up in `kvx doctor`.
+
+> [!WARNING]
+> This puts a long-lived credential on your machine. It is encrypted at rest, but anything running as you that can read kvx's session token can get tokens as the principal while kvx runs. Give the principal only the roles the app needs, keep the secret's expiry short, and replace it with `kvx principal set` when it is rotated. `kvx principal clear` removes it.
 
 ## Use kvx from an Aspire AppHost
 
