@@ -39,7 +39,7 @@ public static partial class ImportCommand
             }
             catch (ArgumentException e) { return KvxCli.Fail(e.Message); }
         }
-        if (vault is null) return KvxCli.Fail("usage: kvx import --vault <name> [--project <dir> | --id <user-secrets-id> | --file <secrets.json>] [--remove-plaintext]");
+        if (vault is null) return KvxCli.Fail(Help.Usage("import"));
         if (new[] { project, id, file }.Count(s => s is not null) > 1) return KvxCli.Fail("give at most one of --project, --id, --file");
 
         string path;

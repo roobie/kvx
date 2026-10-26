@@ -11,7 +11,14 @@
     <PackageId>kvx</PackageId>
     <Version>0.1.0</Version>
     <Description>A local, Azure Key Vault-compatible secrets service for development, encrypted at rest with a key held by the OS.</Description>
+    <RepositoryUrl>https://github.com/roobie/kvx</RepositoryUrl>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The guides `kvx help <topic>` prints; one file per goal, named by its topic. -->
+    <EmbeddedResource Include="../../docs/*.md" LogicalName="docs/%(Filename)%(Extension)" />
+    <AssemblyMetadata Include="RepositoryUrl" Value="$(RepositoryUrl)" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Azure.Identity" Version="1.21.0" />

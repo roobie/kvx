@@ -14,10 +14,7 @@ namespace Kvx.Server.Cli;
 /// </summary>
 public static class PrincipalCommand
 {
-    private const string Usage =
-        "usage: kvx principal set --tenant <tenant id> --client-id <client id> [--for <client id>]... [--default]   (client secret on stdin)\n" +
-        "       kvx principal show\n" +
-        "       kvx principal clear --client-id <client id>";
+    private static string Usage => Help.Usage("principal");
 
     public static async Task<int> Execute(string[] args)
     {

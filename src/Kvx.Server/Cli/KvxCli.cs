@@ -29,6 +29,8 @@ public static class KvxCli
         Utf8WhenRedirected();
         var verb = args.Length > 0 ? args[0] : "";
         var rest = args.Skip(1).ToArray();
+        if (verb is "--help" or "-h") return Help.Execute(rest);
+        if (verb != "help" && Help.Commands.Any(c => c.Verb == verb) && Help.Asked(rest)) return Help.Command(verb);
         switch (verb)
         {
             case "run": return await RunCommand.Execute(rest);
@@ -37,7 +39,7 @@ public static class KvxCli
             case "principal": return await PrincipalCommand.Execute(rest);
             case "doctor": return await DoctorCommand.Execute(rest);
             case "describe": return DescribeCommand.Execute(rest);
-            case "help" or "--help" or "-h": Console.Out.Write(Usage); return 0;
+            case "help": return Help.Execute(rest);
             case "serve": args = rest; break;
         }
         var reuse = args.Contains(ReuseFlag);
@@ -125,29 +127,4 @@ public static class KvxCli
         var i = Array.IndexOf(args, "--");
         return i < 0 ? ([], args) : (args[..i], args[(i + 1)..]);
     }
-
-    private const string Usage = """
-        kvx — a local Azure Key Vault for development secrets.
-
-        Usage:
-          kvx [serve] [--reuse] [--setting=value…]  serve vaults (default); with --reuse, use the kvx already
-                                                    serving this store, and serve when it stops
-          kvx run [--setting=value… --] <app> [args]  run an app with kvx as its managed identity
-          kvx env [--shell posix|fish|pwsh]         print the same environment for your shell
-          kvx import --vault <name> [--project <dir> | --id <user-secrets-id> | --file <secrets.json>] [--remove-plaintext]
-                                                    move .NET user-secrets into a vault
-          kvx principal set --tenant <id> --client-id <id> [--for <id>]… [--default]
-                                                    store a service principal; apps get it with AZURE_CLIENT_ID set
-                                                    to its id or a --for alias; --default serves apps that name none
-                                                    with Kvx:Passthrough=ServicePrincipal; secret on stdin
-          kvx principal show                        list them (never the secrets)
-          kvx principal clear --client-id <id>      remove one
-          kvx doctor [--setting=value…]             check name resolution, the certificate, the key protector
-                                                    and the serving kvx, and say how to fix what is wrong
-          kvx describe [--setting=value…]           where kvx listens and what apps need, as JSON, for tools
-          kvx help
-
-        Settings (any command): --urls=…, --Kvx:Domain=…, --Kvx:TokenFile=…, see appsettings.json next to kvx.
-
-        """;
 }

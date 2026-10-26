@@ -16,7 +16,7 @@ public static class RunCommand
     public static async Task<int> Execute(string[] args)
     {
         var (overrides, command) = KvxCli.SplitAtDashDash(args);
-        if (command.Length == 0) return KvxCli.Fail("usage: kvx run [--setting=value… --] <app> [args…]");
+        if (command.Length == 0) return KvxCli.Fail(Help.Usage("run"));
 
         var (client, error) = await KvxClient.Connect(overrides);
         if (client is null) return KvxCli.FailToConnect(error!);
