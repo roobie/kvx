@@ -212,9 +212,9 @@ public static class DoctorCommand
     }
 
     /// <summary>
-    /// With ServicePrincipal passthrough, whether a principal is stored and signs in. A token for Azure Resource Manager
-    /// proves the sign-in without needing any role assignment. Checked only against a serving kvx, which holds the store
-    /// and knows its own passthrough setting.
+    /// Whether each stored principal signs in, and with ServicePrincipal passthrough whether a default is set. Each is
+    /// asked for by its client id, as an app would; a token for Azure Resource Manager proves the sign-in without needing
+    /// any role assignment. Checked only against a serving kvx, which holds the store and knows its own passthrough setting.
     /// </summary>
     private static async Task<IEnumerable<Finding>> Principal(string[] args)
     {
@@ -228,22 +228,31 @@ public static class DoctorCommand
         using var storedResponse = await http.SendAsync(stored);
         if (storedResponse.StatusCode == HttpStatusCode.NotFound) return [];   // a kvx from before principals
         if (!storedResponse.IsSuccessStatusCode)
-            return [new(Status.Fail, check, $"kvx answered {(int)storedResponse.StatusCode} when asked for its service principal")];
+            return [new(Status.Fail, check, $"kvx answered {(int)storedResponse.StatusCode} when asked for its service principals")];
         var state = (await storedResponse.Content.ReadFromJsonAsync<Api.PrincipalState>())!;
-        if (!state.Used) return [];
-        if (state.Principal is not { } view)
-            return [new(Status.Fail, check, "Kvx:Passthrough is ServicePrincipal, but no service principal is set",
-                "`kvx principal set --tenant <tenant id> --client-id <client id>`, with the client secret on stdin")];
-        var who = $"service principal {view.ClientId} in tenant {view.TenantId}";
 
-        var token = new HttpRequestMessage(HttpMethod.Get,
-            $"{client.IdentityEndpoint}?api-version=2019-08-01&resource={Uri.EscapeDataString("https://management.azure.com")}");
-        token.Headers.Add("X-IDENTITY-HEADER", client.Token);
-        using var tokenResponse = await http.SendAsync(token);
-        if (tokenResponse.IsSuccessStatusCode) return [new(Status.Ok, check, $"{who} signs in")];
-        var error = await tokenResponse.Content.ReadFromJsonAsync<Api.ErrorEnvelope>();
-        return [new(Status.Fail, check, error?.Error.Message ?? $"{who}: {(int)tokenResponse.StatusCode}",
-            "check the tenant, client id and secret against the app registration in Entra; `kvx principal set` replaces them")];
+        var findings = new List<Finding>();
+        if (state.DefaultUsed && !state.Principals.Any(p => p.Default))
+            findings.Add(new(Status.Fail, check, "Kvx:Passthrough is ServicePrincipal, but no default service principal is set",
+                "`kvx principal set --tenant <tenant id> --client-id <client id> --default`, with the client secret on stdin"));
+        foreach (var view in state.Principals)
+        {
+            var who = $"service principal {view.ClientId} in tenant {view.TenantId}";
+            var token = new HttpRequestMessage(HttpMethod.Get,
+                $"{client.IdentityEndpoint}?api-version=2019-08-01&resource={Uri.EscapeDataString("https://management.azure.com")}" +
+                $"&client_id={Uri.EscapeDataString(view.ClientId)}");
+            token.Headers.Add("X-IDENTITY-HEADER", client.Token);
+            using var tokenResponse = await http.SendAsync(token);
+            if (tokenResponse.IsSuccessStatusCode)
+            {
+                findings.Add(new(Status.Ok, check, $"{who} signs in"));
+                continue;
+            }
+            var error = await tokenResponse.Content.ReadFromJsonAsync<Api.ErrorEnvelope>();
+            findings.Add(new(Status.Fail, check, error?.Error.Message ?? $"{who}: {(int)tokenResponse.StatusCode}",
+                "check the tenant, client id and secret against the app registration in Entra; `kvx principal set` replaces them"));
+        }
+        return findings;
     }
 
     /// <summary>

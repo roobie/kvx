@@ -7,20 +7,24 @@ using Kvx.Server.Auth;
 namespace Kvx.Server.Cli;
 
 /// <summary>
-/// `kvx principal set --tenant t --client-id c | show | clear [overrides]`: the service principal passthrough signs in
-/// as when Kvx:Passthrough is ServicePrincipal. It goes through the serving kvx, which keeps it in the sealed store.
+/// `kvx principal set | show | clear [overrides]`: the service principals kvx signs in as. An app gets one by naming
+/// its client id or an alias (AZURE_CLIENT_ID for DefaultAzureCredential); the default one serves apps that name none
+/// when Kvx:Passthrough is ServicePrincipal. It goes through the serving kvx, which keeps them in the sealed store.
 /// The secret comes from stdin, never argv, which shell history and process listings would keep.
 /// </summary>
 public static class PrincipalCommand
 {
     private const string Usage =
-        "usage: kvx principal set --tenant <tenant id> --client-id <client id>   (client secret on stdin)\n" +
-        "       kvx principal show | clear";
+        "usage: kvx principal set --tenant <tenant id> --client-id <client id> [--for <client id>]... [--default]   (client secret on stdin)\n" +
+        "       kvx principal show\n" +
+        "       kvx principal clear --client-id <client id>";
 
     public static async Task<int> Execute(string[] args)
     {
         var action = args.Length > 0 ? args[0] : "";
         string? tenant = null, clientId = null;
+        List<string>? aliases = null;
+        var makeDefault = false;
         var overrides = new List<string>();
         for (var i = 1; i < args.Length; i++)
         {
@@ -31,13 +35,21 @@ public static class PrincipalCommand
                 {
                     case "--tenant": tenant = Value(); break;
                     case "--client-id": clientId = Value(); break;
+                    case "--for": (aliases ??= []).Add(Value()); break;
+                    case "--default": makeDefault = true; break;
                     default: overrides.Add(args[i]); break;
                 }
             }
             catch (ArgumentException e) { return KvxCli.Fail(e.Message); }
         }
-        if (action is not ("set" or "show" or "clear") || (action == "set") != (tenant is not null && clientId is not null))
-            return KvxCli.Fail(Usage);
+        var valid = action switch
+        {
+            "set" => tenant is not null && clientId is not null,
+            "clear" => clientId is not null && tenant is null && aliases is null && !makeDefault,
+            "show" => tenant is null && clientId is null && aliases is null && !makeDefault,
+            _ => false,
+        };
+        if (!valid) return KvxCli.Fail(Usage);
 
         string? secret = null;
         if (action == "set")
@@ -49,40 +61,52 @@ public static class PrincipalCommand
         var (client, error) = await KvxClient.Connect(overrides.ToArray());
         if (client is null) return KvxCli.FailToConnect(error!);
         using var http = client.Http();
-        var request = new HttpRequestMessage(action switch
+        var path = PrincipalApi.Path.TrimStart('/');
+        var request = action switch
         {
-            "set" => HttpMethod.Put,
-            "clear" => HttpMethod.Delete,
-            _ => HttpMethod.Get,
-        }, PrincipalApi.Path.TrimStart('/'));
+            "set" => new HttpRequestMessage(HttpMethod.Put, path)
+                { Content = JsonContent.Create(new PrincipalRequest(tenant, clientId, secret, aliases?.ToArray(), makeDefault)) },
+            "clear" => new HttpRequestMessage(HttpMethod.Delete, $"{path}/{Uri.EscapeDataString(clientId!)}"),
+            _ => new HttpRequestMessage(HttpMethod.Get, path),
+        };
         request.Headers.Authorization = client.Bearer;
-        if (secret is not null) request.Content = JsonContent.Create(new PrincipalRequest(tenant, clientId, secret));
 
         using var response = await http.SendAsync(request);
         if (action == "clear" && response.StatusCode == HttpStatusCode.NotFound)
         {
-            Console.Out.WriteLine("no service principal is set.");
+            Console.Out.WriteLine($"no service principal with client id {clientId} is stored.");
             return 0;
         }
         if (!response.IsSuccessStatusCode)
             return KvxCli.Fail($"{(int)response.StatusCode} {await ErrorMessage(response)}");
         if (action == "clear")
         {
-            Console.Out.WriteLine("service principal removed.");
+            Console.Out.WriteLine($"service principal {clientId} removed.");
             return 0;
         }
 
         var state = (await response.Content.ReadFromJsonAsync<PrincipalState>())!;
-        if (state.Principal is not { } view)
+        if (state.Principals.Length == 0)
         {
-            Console.Out.WriteLine("no service principal is set.");
+            Console.Out.WriteLine("no service principal is stored.");
             return 1;
         }
-        var updated = DateTimeOffset.FromUnixTimeSeconds(view.Updated).ToLocalTime();
-        Console.Out.WriteLine($"service principal {view.ClientId} in tenant {view.TenantId}, set {updated:yyyy-MM-dd HH:mm}.");
-        Console.Out.WriteLine(state.Used
-            ? "Passthrough signs in as it; `kvx doctor` checks that it can."
-            : $"Passthrough does not use it: the serving kvx needs Kvx:Passthrough={Upstream.ServicePrincipal} and a restart.");
+        foreach (var view in state.Principals)
+        {
+            var updated = DateTimeOffset.FromUnixTimeSeconds(view.Updated).ToLocalTime();
+            Console.Out.WriteLine($"service principal {view.ClientId} in tenant {view.TenantId}, set {updated:yyyy-MM-dd HH:mm}" +
+                (view.Default ? ", default" : "") + ".");
+            var ids = string.Join(" or ", view.Aliases.Prepend(view.ClientId));
+            Console.Out.WriteLine($"  apps get it with AZURE_CLIENT_ID={ids}.");
+        }
+        var hasDefault = state.Principals.Any(p => p.Default);
+        Console.Out.WriteLine((state.DefaultUsed, hasDefault) switch
+        {
+            (true, true) => "Apps that name no identity get the default one; `kvx doctor` checks that each signs in.",
+            (true, false) => "Apps that name no identity get an error: no principal is the default. Mark one with `kvx principal set … --default`.",
+            (false, true) => $"Apps that name no identity do not get the default one: the serving kvx needs Kvx:Passthrough={Upstream.ServicePrincipal} and a restart.",
+            _ => "Apps that name no identity get kvx's passthrough, not these.",
+        });
         return 0;
     }
 

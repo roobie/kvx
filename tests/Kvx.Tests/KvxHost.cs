@@ -93,9 +93,13 @@ public sealed class FakePrincipal(Kvx.Server.Storage.ServicePrincipal principal)
     /// <summary>Makes kvx's real ServicePrincipal upstream sign in here; registered last, so it wins.</summary>
     public static void Register(IServiceCollection services)
     {
-        services.AddSingleton<PrincipalCredentialFactory>(p => new FakePrincipal(p));
+        RegisterFactory(services);
         services.AddSingleton(Upstream.Create);
     }
+
+    /// <summary>Only the sign-in, for apps that ask for a principal by client id; passthrough stays as configured.</summary>
+    public static void RegisterFactory(IServiceCollection services) =>
+        services.AddSingleton<PrincipalCredentialFactory>(p => new FakePrincipal(p));
 
     public override AccessToken GetToken(TokenRequestContext context, CancellationToken ct) =>
         principal.Secret == GoodSecret

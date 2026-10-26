@@ -12,11 +12,25 @@ public sealed class StoreDocument
     [JsonObjectCreationHandling(JsonObjectCreationHandling.Populate)]
     public Dictionary<string, VaultDocument> Vaults { get; } = new(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>Passthrough's service principal; outside <see cref="Vaults"/> so the vault API never serves it.</summary>
+    /// <summary>Passthrough's service principals; outside <see cref="Vaults"/> so the vault API never serves them.</summary>
+    public List<ServicePrincipal> Principals { get; set; } = [];
+
+    /// <summary>The one principal a store held before there could be several; moved into <see cref="Principals"/> on load.</summary>
     public ServicePrincipal? Principal { get; set; }
 }
 
-public sealed record ServicePrincipal(string TenantId, string ClientId, string Secret, long Updated);
+/// <summary>
+/// An app asking for <see cref="ClientId"/> or one of <see cref="Aliases"/> gets this principal; <see cref="Default"/>
+/// marks the one for apps that name no identity, when Kvx:Passthrough is ServicePrincipal.
+/// </summary>
+public sealed record ServicePrincipal(string TenantId, string ClientId, string Secret, long Updated)
+{
+    public string[] Aliases { get; init; } = [];
+    public bool Default { get; init; }
+
+    public bool Answers(string id) =>
+        ClientId.Equals(id, StringComparison.OrdinalIgnoreCase) || Aliases.Contains(id, StringComparer.OrdinalIgnoreCase);
+}
 
 public sealed class VaultDocument
 {

@@ -6,7 +6,7 @@ namespace Kvx.Server.Auth;
 
 /// <summary>
 /// Where tokens for resources other than kvx come from: the developer's own Azure login, or the service principal kvx
-/// holds (<see cref="PrincipalCredential"/>). Never DefaultAzureCredential: if kvx itself ran with IDENTITY_ENDPOINT
+/// holds (<see cref="PrincipalCredentials"/>), for apps that name no identity. Never DefaultAzureCredential: if kvx itself ran with IDENTITY_ENDPOINT
 /// set, it would ask itself. <paramref name="From"/> and <paramref name="Fix"/> complete the message an app gets
 /// when the upstream fails.
 /// </summary>
@@ -14,7 +14,8 @@ public sealed record Upstream(TokenCredential? Credential, string From, string F
 {
     public const string ServicePrincipal = "ServicePrincipal";
 
-    public bool UsesPrincipal => Credential is PrincipalCredential;
+    /// <summary>Whether apps that name no identity get the default service principal.</summary>
+    public bool UsesPrincipal => PrincipalCredentials.IsDefault(Credential);
 
     private static readonly Dictionary<string, (Func<TokenCredential> Create, string Login)> Logins =
         new(StringComparer.OrdinalIgnoreCase)
@@ -27,7 +28,7 @@ public sealed record Upstream(TokenCredential? Credential, string From, string F
 
     public static Upstream Create(IServiceProvider services) =>
         FromConfig(services.GetRequiredService<IOptions<KvxOptions>>().Value.Passthrough,
-            services.GetRequiredService<PrincipalCredential>);
+            () => services.GetRequiredService<PrincipalCredentials>().Default);
 
     public static Upstream FromConfig(string names, Func<TokenCredential>? principal = null)
     {
@@ -43,7 +44,7 @@ public sealed record Upstream(TokenCredential? Credential, string From, string F
                     $"Kvx:Passthrough lists {ServicePrincipal} with {string.Join(", ", picked.Where(n => !n.Equals(ServicePrincipal, StringComparison.OrdinalIgnoreCase)))}; " +
                     $"{ServicePrincipal} must be the only entry, so that apps never fall back to acting as you.");
             return new Upstream(principal?.Invoke() ?? throw new ConfigurationException($"{ServicePrincipal} passthrough needs kvx's store."),
-                "the service principal kvx signs in as",
+                "the default service principal kvx signs in as",
                 "`kvx doctor` checks it, and `kvx principal set` replaces a wrong or expired secret.");
         }
 

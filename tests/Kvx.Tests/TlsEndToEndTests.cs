@@ -10,7 +10,11 @@ namespace Kvx.Tests;
 [Trait("Category", "E2E")]
 public sealed class TlsEndToEndTests : IAsyncLifetime
 {
-    private readonly LiveKvx _kvx = new();
+    /// <summary>The client id the app's shell carries, as production's managed identity would be named.</summary>
+    private const string AppIdentity = "00000000-0000-0000-0000-000000000000";
+    private const string AppPrincipal = "dddddddd-dddd-dddd-dddd-dddddddddddd";
+
+    private readonly LiveKvx _kvx = new(services: FakePrincipal.RegisterFactory);
     private static string SampleApp => Path.GetFullPath(Path.Combine(
         typeof(TlsEndToEndTests).Assembly.GetCustomAttributes(typeof(System.Reflection.AssemblyMetadataAttribute), false)
             .Cast<System.Reflection.AssemblyMetadataAttribute>().Single(a => a.Key == "SampleAppDir").Value!,
@@ -23,14 +27,20 @@ public sealed class TlsEndToEndTests : IAsyncLifetime
     public async Task Unmodified_app_round_trips_over_kvx_tls()
     {
         var vault = await Vault("test");
+        var set = await LiveKvx.Cli(["principal", "set", "--tenant", "contoso.onmicrosoft.com", "--client-id", AppPrincipal,
+            "--for", AppIdentity, .. _kvx.ClientSettings], stdin: FakePrincipal.GoodSecret);
+        Assert.True(set.ExitCode == 0, set.ToString());
+
         var result = await RunApp(SampleApp, vault, "conn-string", "Server=db;Password=hunter2");
 
         using var json = JsonDocument.Parse(result.Stdout);
         Assert.StartsWith($"{vault}/secrets/conn-string/", json.RootElement.GetProperty("id").GetString());
         Assert.Equal("Server=db;Password=hunter2", json.RootElement.GetProperty("latest").GetString());
         Assert.Equal("Server=db;Password=hunter2", json.RootElement.GetProperty("byVersion").GetString());
-        // Same process, same credential: a non-Key Vault resource is served by the developer's login, not refused.
-        Assert.Equal(FakeLogin.TokenFor("https://storage.azure.com/.default"), json.RootElement.GetProperty("storageToken").GetString());
+        // Same process, same credential: a non-Key Vault resource is served by the principal standing in for the app's
+        // AZURE_CLIENT_ID, not by the developer's login.
+        Assert.Equal(FakePrincipal.TokenFor(AppPrincipal, "https://storage.azure.com/.default"),
+            json.RootElement.GetProperty("storageToken").GetString());
     }
 
     [Fact]
@@ -59,7 +69,7 @@ public sealed class TlsEndToEndTests : IAsyncLifetime
             foreach (var key in psi.Environment.Keys.Where(k => k.StartsWith("AZURE_") || k.StartsWith("IDENTITY_") || k.StartsWith("SSL_CERT_")).ToList())
                 psi.Environment.Remove(key);
             psi.Environment["AZURE_TENANT_ID"] = "00000000-0000-0000-0000-000000000000";
-            psi.Environment["AZURE_CLIENT_ID"] = "00000000-0000-0000-0000-000000000000";
+            psi.Environment["AZURE_CLIENT_ID"] = AppIdentity;
             psi.Environment["AZURE_CLIENT_SECRET"] = "a-service-principal-secret";
         });
         Assert.True(result.ExitCode == 0, result.ToString());

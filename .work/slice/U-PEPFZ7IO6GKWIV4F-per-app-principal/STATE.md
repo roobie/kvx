@@ -36,18 +36,29 @@ Out: object_id and mi_res_id selection (refused with a message); certificates (B
 Promoted from backlog: B-AYIFGKIAQ7CX64W3 Per-app passthrough principal chosen by the managed-identity client_id
 
 ## Now
-Initialized; next is the store model and the endpoint.
+Code and tests done (95/95). README per-app section next, then BR's live check.
 
 ## Next
-- Store: several principals with aliases; read the single-principal field.
-- Identity endpoint: client_id → principal; unknown → 400.
-- API, CLI, doctor; README; sample-app test under `kvx run`.
+- README.
+- BR's live check (criterion 8).
 
 ## Evidence
+- 1, 3: PrincipalTests An_app_naming_a_client_id_gets_that_principal_in_any_mode (own id and alias; no client_id still gets the login; kvx resource still kvx's token), With_principal_passthrough_a_named_principal_wins_over_the_default; IdentityTests unchanged and passing.
+- 2: An_unknown_client_id_is_400_naming_it_and_never_falls_back (login and principal modes; off mode shares the same branch, which runs before the passthrough check).
+- 4: TlsEndToEndTests.Unmodified_app_round_trips_over_kvx_tls: the sample app under `kvx run` with AZURE_CLIENT_ID=0000… gets FakePrincipal's storage token through a `--for` alias.
+- 5: PrincipalCliTests Show_lists_each_principal_with_the_ids_apps_get_it_by (doctor: two ok lines), Set_reads_the_secret…, Doctor_fails_when_no_principal_is_the_default; Clear_removes_one_principal_by_client_id; An_id_another_principal_answers_to_is_409; Rotating_a_secret_keeps_aliases_and_the_default.
+- 6: A_store_with_the_single_principal_of_before_loads_it_as_the_default.
 
 ## Harvest
+- [ ] decision: an app picks a principal by client_id, matching its own client id or a `--for` alias; an unknown id is refused in every mode, never falling back
+- [ ] decision: the default principal is explicit (`--default`); a legacy single principal loads as the default; aliases and the default mark persist across `set`, so rotating a secret is the same command without them
+- [ ] decision: only client_id selects; mi_res_id/object_id/principal_id are refused, since kvx has no resource ids or object ids to match
+- [ ] learning: MSAL's App Service source names the identity with client_id, mi_res_id or object_id (2019-08-01); clientid and msi_res_id spellings also exist
+- [ ] learning: DefaultAzureCredential's managed-identity leg sends AZURE_CLIENT_ID as client_id; a bare ManagedIdentityCredential sends none
+- [ ] backlog: behaviour change to flag in the release note: a shell left with AZURE_CLIENT_ID and no matching principal now gets 400 for non-Key Vault resources instead of the developer's passthrough
 
 ## Log
 - 2026-10-26 initialized from B-AYIFGKIAQ7CX64W3 after BR's live check of the single principal
 - 2026-10-26 BR chose: own client id plus optional alias; no client_id behaves as today
 - 2026-10-26 phase initialize → execute
+- 2026-10-26 several principals selected by client_id: store, endpoint, API, CLI, doctor, tests

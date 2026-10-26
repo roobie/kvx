@@ -33,8 +33,8 @@ public static class KvxApp
         builder.Services.AddSingleton<SecretRepository>();
         builder.Services.AddSingleton<DevTokens>();
         builder.Services.AddHostedService<Names.LoopbackDns>();
-        builder.Services.TryAddSingleton<PrincipalCredentialFactory>(PrincipalCredential.ClientSecret);
-        builder.Services.TryAddSingleton<PrincipalCredential>();
+        builder.Services.TryAddSingleton<PrincipalCredentialFactory>(PrincipalCredentials.ClientSecret);
+        builder.Services.TryAddSingleton<PrincipalCredentials>();
         builder.Services.TryAddSingleton(Upstream.Create);
         builder.Services.ConfigureHttpJsonOptions(o =>
             o.SerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull);

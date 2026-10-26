@@ -37,6 +37,12 @@ public sealed class SecretRepository
         {
             if (plaintext is not null) CryptographicOperations.ZeroMemory(plaintext);
         }
+        if (_doc.Principal is { } single)
+        {
+            // It was the only source, so it stays the one for apps that name no identity.
+            _doc.Principals.Insert(0, single with { Default = true });
+            _doc.Principal = null;
+        }
     }
 
     private long Now => _time.GetUtcNow().ToUnixTimeSeconds();
@@ -215,27 +221,59 @@ public sealed class SecretRepository
         }
     }
 
-    public ServicePrincipal? Principal
+    public IReadOnlyList<ServicePrincipal> Principals
     {
-        get { lock (_lock) return _doc.Principal; }
+        get { lock (_lock) return [.. _doc.Principals]; }
     }
 
-    public ServicePrincipal SetPrincipal(string tenantId, string clientId, string secret)
+    public ServicePrincipal? DefaultPrincipal
+    {
+        get { lock (_lock) return _doc.Principals.FirstOrDefault(p => p.Default); }
+    }
+
+    /// <summary>The principal an app asking for <paramref name="id"/> gets, by its client id or an alias.</summary>
+    public ServicePrincipal? FindPrincipal(string id)
+    {
+        lock (_lock) return _doc.Principals.FirstOrDefault(p => p.Answers(id));
+    }
+
+    /// <summary>
+    /// Adds or replaces the principal with <paramref name="clientId"/>. Aliases and the default mark are kept when not
+    /// given, so rotating a secret is the same command without them; an id another principal answers to is refused.
+    /// </summary>
+    public ServicePrincipal SetPrincipal(string tenantId, string clientId, string secret, string[]? aliases = null, bool makeDefault = false)
     {
         lock (_lock)
         {
-            _doc.Principal = new ServicePrincipal(tenantId, clientId, secret, Now);
+            var existing = _doc.Principals.FirstOrDefault(p => p.ClientId.Equals(clientId, StringComparison.OrdinalIgnoreCase));
+            var ids = (aliases ?? existing?.Aliases ?? [])
+                .Where(a => !a.Equals(clientId, StringComparison.OrdinalIgnoreCase))
+                .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+            foreach (var id in ids.Prepend(clientId))
+                if (_doc.Principals.FirstOrDefault(p => p != existing && p.Answers(id)) is { } other)
+                    throw new StoreException(StoreProblem.AlreadyExists,
+                        $"Service principal {other.ClientId} already answers to {id}; change or clear it first.");
+
+            var principal = new ServicePrincipal(tenantId, clientId, secret, Now)
+            {
+                Aliases = ids,
+                Default = makeDefault || existing?.Default == true,
+            };
+            if (makeDefault)
+                for (var i = 0; i < _doc.Principals.Count; i++)
+                    _doc.Principals[i] = _doc.Principals[i] with { Default = false };
+            if (existing is null) _doc.Principals.Add(principal);
+            else _doc.Principals[_doc.Principals.FindIndex(p => p.ClientId == existing.ClientId)] = principal;
             Persist();
-            return _doc.Principal;
+            return principal;
         }
     }
 
-    public bool ClearPrincipal()
+    public bool ClearPrincipal(string clientId)
     {
         lock (_lock)
         {
-            if (_doc.Principal is null) return false;
-            _doc.Principal = null;
+            if (_doc.Principals.RemoveAll(p => p.ClientId.Equals(clientId, StringComparison.OrdinalIgnoreCase)) == 0) return false;
             Persist();
             return true;
         }

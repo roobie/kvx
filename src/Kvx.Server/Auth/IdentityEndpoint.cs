@@ -1,6 +1,7 @@
 using Azure.Core;
 using Azure.Identity;
 using Kvx.Server.Api;
+using Kvx.Server.Storage;
 using Microsoft.Extensions.Options;
 
 namespace Kvx.Server.Auth;
@@ -26,6 +27,7 @@ public static class IdentityEndpoint
         app.MapGet(Path, Token).AllowAnonymous();
 
     private static async Task<IResult> Token(HttpContext context, DevTokens tokens, Upstream upstream,
+        SecretRepository store, PrincipalCredentials principals,
         IOptions<KvxOptions> options, TimeProvider time, ILoggerFactory loggers, CancellationToken ct)
     {
         var header = context.Request.Headers["X-IDENTITY-HEADER"].ToString();
@@ -41,6 +43,28 @@ public static class IdentityEndpoint
             return Errors.Result(400, "BadParameter", "The 'resource' query parameter is required.");
 
         var log = loggers.CreateLogger(typeof(IdentityEndpoint));
+        var query = context.Request.Query;
+        if (new[] { "mi_res_id", "msi_res_id", "object_id", "principal_id" }.FirstOrDefault(k => query[k].ToString().Length > 0) is { } other)
+            return Errors.Result(400, "BadParameter",
+                $"kvx picks an identity only by client_id, not by {other}. Name the identity by its client id " +
+                "(AZURE_CLIENT_ID for DefaultAzureCredential) and store a service principal for it with `kvx principal set`.");
+
+        var clientId = query["client_id"].ToString() is { Length: > 0 } id ? id : query["clientid"].ToString();
+        if (clientId.Length > 0)
+        {
+            // An app that names its identity gets exactly that one or an error, never kvx's passthrough in its place.
+            if (store.FindPrincipal(clientId) is not { } principal)
+            {
+                log.LogWarning("Refused a token for {Resource}: no service principal is stored for client id {ClientId}.", resource, clientId);
+                return Errors.Result(400, "BadParameter",
+                    $"This app asked for the identity with client id {clientId} (DefaultAzureCredential sends AZURE_CLIENT_ID), " +
+                    $"and kvx holds no service principal for it. Run `kvx principal set --tenant <tenant id> --client-id {clientId}`, " +
+                    $"or add `--for {clientId}` to the principal that stands in for it; or unset AZURE_CLIENT_ID to use kvx's passthrough.");
+            }
+            return await Pass(principals.For(principal), $"service principal {principal.ClientId}",
+                "`kvx doctor` checks it, and `kvx principal set` replaces a wrong or expired secret.");
+        }
+
         if (upstream.Credential is null)
         {
             // The app will fail on a non-Key Vault Azure client; say so where the developer running kvx looks too.
@@ -50,17 +74,22 @@ public static class IdentityEndpoint
                 "This app gets its DefaultAzureCredential tokens from kvx (IDENTITY_ENDPOINT is set), so it cannot reach other Azure services.");
         }
 
-        try
+        return await Pass(upstream.Credential, upstream.From, upstream.Fix);
+
+        async Task<IResult> Pass(TokenCredential credential, string from, string fix)
         {
-            var token = await upstream.Credential.GetTokenAsync(new TokenRequestContext([resource + "/.default"]), ct);
-            log.LogInformation("Passed a token request for {Resource} through to {From}.", resource, upstream.From);
-            return Issue(token.Token, token.ExpiresOn, resource);
-        }
-        catch (Exception e) when (e is CredentialUnavailableException or AuthenticationFailedException)
-        {
-            log.LogWarning("Could not pass through a token for {Resource}: {Reason}", resource, e.Message);
-            return Errors.Result(400, "BadParameter",
-                $"kvx could not get a token for '{resource}' from {upstream.From}. {upstream.Fix} Details: {e.Message}");
+            try
+            {
+                var token = await credential.GetTokenAsync(new TokenRequestContext([resource + "/.default"]), ct);
+                log.LogInformation("Passed a token request for {Resource} through to {From}.", resource, from);
+                return Issue(token.Token, token.ExpiresOn, resource);
+            }
+            catch (Exception e) when (e is CredentialUnavailableException or AuthenticationFailedException)
+            {
+                log.LogWarning("Could not pass through a token for {Resource}: {Reason}", resource, e.Message);
+                return Errors.Result(400, "BadParameter",
+                    $"kvx could not get a token for '{resource}' from {from}. {fix} Details: {e.Message}");
+            }
         }
     }
 

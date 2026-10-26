@@ -136,9 +136,12 @@ public static class KvxCli
           kvx env [--shell posix|fish|pwsh]         print the same environment for your shell
           kvx import --vault <name> [--project <dir> | --id <user-secrets-id> | --file <secrets.json>] [--remove-plaintext]
                                                     move .NET user-secrets into a vault
-          kvx principal set --tenant <id> --client-id <id>  store the service principal passthrough signs in as
+          kvx principal set --tenant <id> --client-id <id> [--for <id>]… [--default]
+                                                    store a service principal; apps get it with AZURE_CLIENT_ID set
+                                                    to its id or a --for alias; --default serves apps that name none
                                                     with Kvx:Passthrough=ServicePrincipal; secret on stdin
-          kvx principal show | clear                show or remove it (never the secret)
+          kvx principal show                        list them (never the secrets)
+          kvx principal clear --client-id <id>      remove one
           kvx doctor [--setting=value…]             check name resolution, the certificate, the key protector
                                                     and the serving kvx, and say how to fix what is wrong
           kvx describe [--setting=value…]           where kvx listens and what apps need, as JSON, for tools

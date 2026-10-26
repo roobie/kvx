@@ -5,6 +5,9 @@ using System.Text.Json;
 using Kvx.Server;
 using Kvx.Server.Api;
 using Kvx.Server.Auth;
+using Kvx.Server.Storage;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Kvx.Tests;
 
@@ -19,22 +22,27 @@ public sealed class PrincipalTests : IDisposable
     private readonly TempDir _dir = new();
     public void Dispose() => _dir.Dispose();
 
+    private const string ManagedIdentity = "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee";
+
     private KvxHost Host() => new(_dir, configure: KvxHost.PrincipalPassthrough);
 
-    private static async Task<HttpResponseMessage> SetPrincipal(KvxHost kvx, string clientId, string secret)
+    /// <summary>Login passthrough, with principals signing in through <see cref="FakePrincipal"/> for apps that name one.</summary>
+    private KvxHost LoginHost() => new(_dir, configure: b => b.ConfigureTestServices(FakePrincipal.RegisterFactory));
+
+    private static Task<HttpResponseMessage> SetPrincipal(KvxHost kvx, string clientId, string secret) =>
+        SetPrincipal(kvx, new PrincipalRequest(Tenant, clientId, secret, Default: true));
+
+    private static async Task<HttpResponseMessage> SetPrincipal(KvxHost kvx, PrincipalRequest body)
     {
-        var request = new HttpRequestMessage(HttpMethod.Put, PrincipalApi.Path)
-        {
-            Content = JsonContent.Create(new PrincipalRequest(Tenant, clientId, secret)),
-        };
+        var request = new HttpRequestMessage(HttpMethod.Put, PrincipalApi.Path) { Content = JsonContent.Create(body) };
         request.Headers.Authorization = new("Bearer", kvx.Token);
         return await kvx.CreateClient().SendAsync(request);
     }
 
-    private static async Task<(HttpStatusCode Status, string Body)> Token(KvxHost kvx, string resource)
+    private static async Task<(HttpStatusCode Status, string Body)> Token(KvxHost kvx, string resource, string query = "")
     {
         var request = new HttpRequestMessage(HttpMethod.Get,
-            $"{IdentityEndpoint.Path}?api-version=2019-08-01&resource={Uri.EscapeDataString(resource)}");
+            $"{IdentityEndpoint.Path}?api-version=2019-08-01&resource={Uri.EscapeDataString(resource)}{query}");
         request.Headers.Add("X-IDENTITY-HEADER", kvx.Token);
         var response = await kvx.CreateClient().SendAsync(request);
         return (response.StatusCode, await response.Content.ReadAsStringAsync());
@@ -119,16 +127,130 @@ public sealed class PrincipalTests : IDisposable
     }
 
     [Fact]
-    public async Task The_serving_kvx_says_whether_passthrough_uses_the_principal()
+    public async Task The_serving_kvx_says_whether_passthrough_uses_the_default_principal()
     {
         using (var kvx = Host())
-            Assert.Equal(new PrincipalState(true, null), await State(kvx));
+        {
+            var empty = await State(kvx);
+            Assert.True(empty.DefaultUsed);
+            Assert.Empty(empty.Principals);
+        }
 
         using var other = new KvxHost(_dir);   // login passthrough
         await SetPrincipal(other, ClientA, FakePrincipal.GoodSecret);
         var state = await State(other);
-        Assert.False(state.Used);
-        Assert.Equal(ClientA, state.Principal?.ClientId);
+        Assert.False(state.DefaultUsed);
+        Assert.Equal(ClientA, Assert.Single(state.Principals).ClientId);
+    }
+
+    [Theory]
+    [InlineData(ClientA)]
+    [InlineData(ManagedIdentity)]   // an alias: production's managed identity, standing in under its client id
+    public async Task An_app_naming_a_client_id_gets_that_principal_in_any_mode(string asked)
+    {
+        using var kvx = LoginHost();
+        await SetPrincipal(kvx, new PrincipalRequest(Tenant, ClientA, FakePrincipal.GoodSecret, [ManagedIdentity]));
+        await SetPrincipal(kvx, new PrincipalRequest(Tenant, ClientB, FakePrincipal.GoodSecret));
+
+        var (status, body) = await Token(kvx, Storage, $"&client_id={asked}");
+        Assert.True(status == HttpStatusCode.OK, body);
+        Assert.Equal(FakePrincipal.TokenFor(ClientA, Storage + "/.default"), AccessToken(body));
+
+        // Naming no identity still gets the developer's login; kvx's own resource still gets kvx's token.
+        Assert.Equal(FakeLogin.TokenFor(Storage + "/.default"), AccessToken((await Token(kvx, Storage)).Body));
+        Assert.Equal(kvx.Token, AccessToken((await Token(kvx, "https://dev.localhost", $"&client_id={asked}")).Body));
+    }
+
+    [Fact]
+    public async Task With_principal_passthrough_a_named_principal_wins_over_the_default()
+    {
+        using var kvx = Host();
+        await SetPrincipal(kvx, ClientA, FakePrincipal.GoodSecret);   // the default
+        await SetPrincipal(kvx, new PrincipalRequest(Tenant, ClientB, FakePrincipal.GoodSecret));
+
+        Assert.Equal(FakePrincipal.TokenFor(ClientB, Storage + "/.default"),
+            AccessToken((await Token(kvx, Storage, $"&client_id={ClientB}")).Body));
+        Assert.Equal(FakePrincipal.TokenFor(ClientA, Storage + "/.default"), AccessToken((await Token(kvx, Storage)).Body));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task An_unknown_client_id_is_400_naming_it_and_never_falls_back(bool principalPassthrough)
+    {
+        using var kvx = principalPassthrough ? Host() : LoginHost();
+        await SetPrincipal(kvx, ClientA, FakePrincipal.GoodSecret);
+
+        var (status, body) = await Token(kvx, Storage, $"&client_id={ClientB}");
+        Assert.Equal(HttpStatusCode.BadRequest, status);
+        var message = ErrorMessage(body);
+        Assert.Contains(ClientB, message);
+        Assert.Contains("--for", message);
+        Assert.Contains("AZURE_CLIENT_ID", message);
+    }
+
+    [Theory]
+    [InlineData("mi_res_id")]
+    [InlineData("object_id")]
+    public async Task Other_ways_of_naming_an_identity_are_400(string parameter)
+    {
+        using var kvx = LoginHost();
+        var (status, body) = await Token(kvx, Storage, $"&{parameter}=x");
+        Assert.Equal(HttpStatusCode.BadRequest, status);
+        Assert.Contains("client_id", ErrorMessage(body));
+    }
+
+    [Fact]
+    public async Task An_id_another_principal_answers_to_is_409()
+    {
+        using var kvx = LoginHost();
+        await SetPrincipal(kvx, new PrincipalRequest(Tenant, ClientA, FakePrincipal.GoodSecret, [ManagedIdentity]));
+        var conflict = await SetPrincipal(kvx, new PrincipalRequest(Tenant, ClientB, FakePrincipal.GoodSecret, [ManagedIdentity]));
+        Assert.Equal(HttpStatusCode.Conflict, conflict.StatusCode);
+        Assert.Contains(ClientA, await conflict.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task Rotating_a_secret_keeps_aliases_and_the_default()
+    {
+        using var kvx = Host();
+        await SetPrincipal(kvx, new PrincipalRequest(Tenant, ClientA, "old", [ManagedIdentity], Default: true));
+        await SetPrincipal(kvx, new PrincipalRequest(Tenant, ClientA, FakePrincipal.GoodSecret));
+
+        var view = Assert.Single((await State(kvx)).Principals);
+        Assert.True(view.Default);
+        Assert.Equal([ManagedIdentity], view.Aliases);
+        Assert.Equal(HttpStatusCode.OK, (await Token(kvx, Storage)).Status);
+        Assert.Equal(HttpStatusCode.OK, (await Token(kvx, Storage, $"&client_id={ManagedIdentity}")).Status);
+    }
+
+    [Fact]
+    public async Task Clear_removes_one_principal_by_client_id()
+    {
+        using var kvx = LoginHost();
+        await SetPrincipal(kvx, new PrincipalRequest(Tenant, ClientA, FakePrincipal.GoodSecret));
+        await SetPrincipal(kvx, new PrincipalRequest(Tenant, ClientB, FakePrincipal.GoodSecret));
+
+        var delete = new HttpRequestMessage(HttpMethod.Delete, $"{PrincipalApi.Path}/{ClientA}");
+        delete.Headers.Authorization = new("Bearer", kvx.Token);
+        Assert.Equal(HttpStatusCode.NoContent, (await kvx.CreateClient().SendAsync(delete)).StatusCode);
+        Assert.Equal(ClientB, Assert.Single((await State(kvx)).Principals).ClientId);
+    }
+
+    [Fact]
+    public async Task A_store_with_the_single_principal_of_before_loads_it_as_the_default()
+    {
+        using (var kvx = Host())
+            kvx.Services.GetRequiredService<SealedStore>().Save(JsonSerializer.SerializeToUtf8Bytes(new
+            {
+                Principal = new { TenantId = Tenant, ClientId = ClientA, Secret = FakePrincipal.GoodSecret, Updated = 1L },
+            }));
+
+        using var restarted = Host();
+        var view = Assert.Single((await State(restarted)).Principals);
+        Assert.Equal(ClientA, view.ClientId);
+        Assert.True(view.Default);
+        Assert.Equal(FakePrincipal.TokenFor(ClientA, Storage + "/.default"), AccessToken((await Token(restarted, Storage)).Body));
     }
 
     [Fact]
@@ -210,9 +332,9 @@ public sealed class PrincipalCliTests : IAsyncLifetime
     [Fact]
     public async Task Set_reads_the_secret_from_stdin_and_show_never_prints_it()
     {
-        var set = await Principal(["set", "--tenant", Tenant, "--client-id", Client], FakePrincipal.GoodSecret + "\n");
+        var set = await Principal(["set", "--tenant", Tenant, "--client-id", Client, "--default"], FakePrincipal.GoodSecret + "\n");
         Assert.True(set.ExitCode == 0, set.ToString());
-        Assert.Contains("Passthrough signs in as it", set.Stdout);
+        Assert.Contains("get the default one", set.Stdout);
 
         var show = await Principal(["show"]);
         Assert.True(show.ExitCode == 0, show.ToString());
@@ -223,8 +345,33 @@ public sealed class PrincipalCliTests : IAsyncLifetime
         var doctor = await Doctor();
         Assert.StartsWith("ok", Line(doctor, "principal"));
 
-        Assert.Equal(0, (await Principal(["clear"])).ExitCode);
+        Assert.Equal(0, (await Principal(["clear", "--client-id", Client])).ExitCode);
         Assert.Equal(1, (await Principal(["show"])).ExitCode);
+    }
+
+    [Fact]
+    public async Task Show_lists_each_principal_with_the_ids_apps_get_it_by()
+    {
+        const string other = "dddddddd-dddd-dddd-dddd-dddddddddddd", alias = "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee";
+        await Principal(["set", "--tenant", Tenant, "--client-id", Client, "--default"], FakePrincipal.GoodSecret);
+        await Principal(["set", "--tenant", Tenant, "--client-id", other, "--for", alias], FakePrincipal.GoodSecret);
+
+        var show = await Principal(["show"]);
+        Assert.True(show.ExitCode == 0, show.ToString());
+        Assert.Contains($"AZURE_CLIENT_ID={Client}.", show.Stdout);
+        Assert.Contains($"AZURE_CLIENT_ID={other} or {alias}", show.Stdout);
+
+        var doctor = await Doctor();
+        Assert.Equal(2, doctor.Stdout.Split('\n').Count(l => l.StartsWith("ok") && l.Contains("signs in")));
+    }
+
+    [Fact]
+    public async Task Doctor_fails_when_no_principal_is_the_default()
+    {
+        await Principal(["set", "--tenant", Tenant, "--client-id", Client], FakePrincipal.GoodSecret);
+        var doctor = await Doctor();
+        Assert.Equal(1, doctor.ExitCode);
+        Assert.Contains("--default", doctor.Stdout);
     }
 
     [Fact]
@@ -247,7 +394,7 @@ public sealed class PrincipalCliTests : IAsyncLifetime
     [Fact]
     public async Task Doctor_fails_when_the_principal_cannot_sign_in()
     {
-        await Principal(["set", "--tenant", Tenant, "--client-id", Client], "wrong-secret");
+        await Principal(["set", "--tenant", Tenant, "--client-id", Client, "--default"], "wrong-secret");
         var doctor = await Doctor();
         Assert.Equal(1, doctor.ExitCode);
         Assert.StartsWith("FAIL", Line(doctor, "principal"));
