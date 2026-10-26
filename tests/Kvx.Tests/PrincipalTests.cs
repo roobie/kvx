@@ -111,6 +111,26 @@ public sealed class PrincipalTests : IDisposable
         Assert.Equal(HttpStatusCode.BadRequest, (await kvx.CreateClient().SendAsync(request)).StatusCode);
     }
 
+    private static async Task<PrincipalState> State(KvxHost kvx)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Get, PrincipalApi.Path);
+        request.Headers.Authorization = new("Bearer", kvx.Token);
+        return (await (await kvx.CreateClient().SendAsync(request)).Content.ReadFromJsonAsync<PrincipalState>())!;
+    }
+
+    [Fact]
+    public async Task The_serving_kvx_says_whether_passthrough_uses_the_principal()
+    {
+        using (var kvx = Host())
+            Assert.Equal(new PrincipalState(true, null), await State(kvx));
+
+        using var other = new KvxHost(_dir);   // login passthrough
+        await SetPrincipal(other, ClientA, FakePrincipal.GoodSecret);
+        var state = await State(other);
+        Assert.False(state.Used);
+        Assert.Equal(ClientA, state.Principal?.ClientId);
+    }
+
     [Fact]
     public async Task The_principal_endpoint_needs_the_session_token()
     {
@@ -164,7 +184,10 @@ public sealed class PrincipalTests : IDisposable
     }
 }
 
-/// <summary>`kvx principal` and `kvx doctor` as their own processes, against a kvx with principal passthrough.</summary>
+/// <summary>
+/// `kvx principal` and `kvx doctor` as their own processes, against a kvx with principal passthrough. Only the server
+/// is given Kvx:Passthrough, so the commands must learn the mode from it.
+/// </summary>
 public sealed class PrincipalCliTests : IAsyncLifetime
 {
     private const string Tenant = "contoso.onmicrosoft.com";

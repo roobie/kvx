@@ -14,6 +14,8 @@ public sealed record Upstream(TokenCredential? Credential, string From, string F
 {
     public const string ServicePrincipal = "ServicePrincipal";
 
+    public bool UsesPrincipal => Credential is PrincipalCredential;
+
     private static readonly Dictionary<string, (Func<TokenCredential> Create, string Login)> Logins =
         new(StringComparer.OrdinalIgnoreCase)
         {

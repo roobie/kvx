@@ -41,7 +41,6 @@ public sealed class LiveKvx(string[]? settings = null, Action<IServiceCollection
         $"--Kvx:Domain={Domain}",
         $"--Kvx:DevCertTrustDir={TrustDir}",
         "--Kvx:Dns=off",   // the run's one responder answers instead; see Names
-        .. settings ?? [],
     ];
 
     public string VaultUri(string vault) => $"https://{vault}.{Domain}:{HttpsPort}";
@@ -88,8 +87,11 @@ public sealed class LiveKvx(string[]? settings = null, Action<IServiceCollection
         await _app.StartAsync();
     }
 
-    /// <summary>The settings a second kvx process needs to serve exactly what this one serves.</summary>
-    public string[] ServerSettings => [.. ClientSettings, $"--Kvx:DataDir={DataDir}", .. CertificateSettings];
+    /// <summary>
+    /// The settings a second kvx process needs to serve exactly what this one serves. The extra settings are the
+    /// server's alone, so client commands must learn them from the serving kvx, as they do on a developer's machine.
+    /// </summary>
+    public string[] ServerSettings => [.. ClientSettings, .. settings ?? [], $"--Kvx:DataDir={DataDir}", .. CertificateSettings];
 
     /// <summary>Stops serving and releases the store, as a developer stopping their kvx does.</summary>
     public async Task StopAsync()

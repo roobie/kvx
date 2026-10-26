@@ -85,13 +85,13 @@ kvx principal set --tenant <tenant id> --client-id <application id>   # asks for
 kvx doctor                                       # checks that the principal signs in
 ```
 
-`kvx principal set` reads the secret from stdin (piped, or typed without echo), so it stays out of shell history. kvx keeps it in its encrypted store, under the same key as your vaults, and never returns it: `kvx principal show` prints only the tenant and client id. A new principal applies to the next token request, with no restart. `ServicePrincipal` must be the only entry in `Kvx:Passthrough`, so an app never falls back to acting as you when the principal fails. A principal that is missing or cannot sign in gives the app an error naming it and the Entra error code.
+`kvx principal set` reads the secret from stdin (piped, or typed without echo), so it stays out of shell history. kvx keeps it in its encrypted store, under the same key as your vaults, and never returns it: `kvx principal show` prints only the tenant and client id. A new principal applies to the next token request, with no restart, but switching `Kvx:Passthrough` itself takes a restart of kvx. `kvx principal` and `kvx doctor` ask the serving kvx which mode it runs in, so they need no `--Kvx:Passthrough` of their own. `ServicePrincipal` must be the only entry in `Kvx:Passthrough`, so an app never falls back to acting as you when the principal fails. A principal that is missing or cannot sign in gives the app an error naming it and the Entra error code.
 
 In Entra this needs:
 
 - **An app registration**, preferably one per developer, so no secret is shared.
 - **A client secret** with a short expiry. Certificates and federated credentials are not supported.
-- **Role assignments** on the resources the app uses, the same ones production's managed identity has, and no more. They replace your own access for the app.
+- **Role assignments** on the resources the app uses, the same ones production's managed identity has, and no more. They replace your own access for the app. A new principal has none: it signs in, and `kvx doctor` passes, but it sees no resources until it is given roles.
 - **A check of tenant policy.** Some tenants restrict service-principal sign-in by location or forbid client secrets. The error then shows up in `kvx doctor`.
 
 > [!WARNING]

@@ -59,10 +59,10 @@ public static class PrincipalCommand
         if (secret is not null) request.Content = JsonContent.Create(new PrincipalRequest(tenant, clientId, secret));
 
         using var response = await http.SendAsync(request);
-        if (response.StatusCode == HttpStatusCode.NotFound)
+        if (action == "clear" && response.StatusCode == HttpStatusCode.NotFound)
         {
             Console.Out.WriteLine("no service principal is set.");
-            return action == "clear" ? 0 : 1;
+            return 0;
         }
         if (!response.IsSuccessStatusCode)
             return KvxCli.Fail($"{(int)response.StatusCode} {await ErrorMessage(response)}");
@@ -72,13 +72,17 @@ public static class PrincipalCommand
             return 0;
         }
 
-        var view = (await response.Content.ReadFromJsonAsync<PrincipalView>())!;
+        var state = (await response.Content.ReadFromJsonAsync<PrincipalState>())!;
+        if (state.Principal is not { } view)
+        {
+            Console.Out.WriteLine("no service principal is set.");
+            return 1;
+        }
         var updated = DateTimeOffset.FromUnixTimeSeconds(view.Updated).ToLocalTime();
         Console.Out.WriteLine($"service principal {view.ClientId} in tenant {view.TenantId}, set {updated:yyyy-MM-dd HH:mm}.");
-        var selected = client.Options.Passthrough.Trim().Equals(Upstream.ServicePrincipal, StringComparison.OrdinalIgnoreCase);
-        Console.Out.WriteLine(selected
+        Console.Out.WriteLine(state.Used
             ? "Passthrough signs in as it; `kvx doctor` checks that it can."
-            : $"Passthrough does not use it until Kvx:Passthrough is {Upstream.ServicePrincipal}.");
+            : $"Passthrough does not use it: the serving kvx needs Kvx:Passthrough={Upstream.ServicePrincipal} and a restart.");
         return 0;
     }
 

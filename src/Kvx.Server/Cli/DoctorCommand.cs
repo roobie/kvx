@@ -41,7 +41,7 @@ public static class DoctorCommand
             Certificate(config, host, options.Domain),
             KeyProtector(options),
             .. serving,
-            .. await Principal(args, options),
+            .. await Principal(args),
         ];
 
         foreach (var f in findings)
@@ -213,12 +213,12 @@ public static class DoctorCommand
 
     /// <summary>
     /// With ServicePrincipal passthrough, whether a principal is stored and signs in. A token for Azure Resource Manager
-    /// proves the sign-in without needing any role assignment. Checked only against a serving kvx, which holds the store.
+    /// proves the sign-in without needing any role assignment. Checked only against a serving kvx, which holds the store
+    /// and knows its own passthrough setting.
     /// </summary>
-    private static async Task<IEnumerable<Finding>> Principal(string[] args, KvxOptions options)
+    private static async Task<IEnumerable<Finding>> Principal(string[] args)
     {
         const string check = "principal";
-        if (!options.Passthrough.Trim().Equals(Auth.Upstream.ServicePrincipal, StringComparison.OrdinalIgnoreCase)) return [];
         var (client, _) = await KvxClient.Connect(args);
         if (client is null) return [];
 
@@ -226,11 +226,15 @@ public static class DoctorCommand
         var stored = new HttpRequestMessage(HttpMethod.Get, Api.PrincipalApi.Path.TrimStart('/'));
         stored.Headers.Authorization = client.Bearer;
         using var storedResponse = await http.SendAsync(stored);
-        if (storedResponse.StatusCode == HttpStatusCode.NotFound)
+        if (storedResponse.StatusCode == HttpStatusCode.NotFound) return [];   // a kvx from before principals
+        if (!storedResponse.IsSuccessStatusCode)
+            return [new(Status.Fail, check, $"kvx answered {(int)storedResponse.StatusCode} when asked for its service principal")];
+        var state = (await storedResponse.Content.ReadFromJsonAsync<Api.PrincipalState>())!;
+        if (!state.Used) return [];
+        if (state.Principal is not { } view)
             return [new(Status.Fail, check, "Kvx:Passthrough is ServicePrincipal, but no service principal is set",
                 "`kvx principal set --tenant <tenant id> --client-id <client id>`, with the client secret on stdin")];
-        var view = await storedResponse.Content.ReadFromJsonAsync<Api.PrincipalView>();
-        var who = $"service principal {view!.ClientId} in tenant {view.TenantId}";
+        var who = $"service principal {view.ClientId} in tenant {view.TenantId}";
 
         var token = new HttpRequestMessage(HttpMethod.Get,
             $"{client.IdentityEndpoint}?api-version=2019-08-01&resource={Uri.EscapeDataString("https://management.azure.com")}");
