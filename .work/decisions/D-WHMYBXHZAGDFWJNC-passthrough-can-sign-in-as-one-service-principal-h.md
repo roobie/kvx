@@ -7,7 +7,7 @@ read_if:
   - reviewing kvx's security boundary
 refs:
   - src/Kvx.Server/Auth/Upstream.cs#FromConfig
-  - src/Kvx.Server/Auth/PrincipalCredential.cs#PrincipalCredential
+  - src/Kvx.Server/Auth/PrincipalCredentials.cs#PrincipalCredentials
   - src/Kvx.Server/Api/PrincipalApi.cs#PrincipalApi
   - README.md
 ---

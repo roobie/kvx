@@ -50,7 +50,7 @@ Code, tests (95/95) and README done. Waiting on BR's live check.
 - 7: README "Each app as its own principal".
 
 ## Harvest
-- [ ] decision: an app picks a principal by client_id, matching its own client id or a `--for` alias; an unknown id is refused in every mode, never falling back
+- [ ] decision: an app picks a principal by client_id, matching its own client id or a `--for` alias; an unknown id is refused in every mode, never falling back (supersedes D-WHMYBXHZAGDFWJNC's "one per kvx"; restate its exclusive and sealed-store reasons)
 - [ ] decision: the default principal is explicit (`--default`); a legacy single principal loads as the default; aliases and the default mark persist across `set`, so rotating a secret is the same command without them
 - [ ] decision: only client_id selects; mi_res_id/object_id/principal_id are refused, since kvx has no resource ids or object ids to match
 - [ ] learning: MSAL's App Service source names the identity with client_id, mi_res_id or object_id (2019-08-01); clientid and msi_res_id spellings also exist
