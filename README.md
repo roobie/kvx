@@ -81,11 +81,27 @@ With `Kvx:Passthrough` set to `ServicePrincipal`, kvx gets tokens for other Azur
 
 ```sh
 kvx --Kvx:Passthrough=ServicePrincipal          # or set it in appsettings.json
-kvx principal set --tenant <tenant id> --client-id <application id>   # asks for the client secret
+kvx principal set --tenant <tenant id> --client-id <application id> --default   # asks for the client secret
 kvx doctor                                       # checks that the principal signs in
 ```
 
-`kvx principal set` reads the secret from stdin (piped, or typed without echo), so it stays out of shell history. kvx keeps it in its encrypted store, under the same key as your vaults, and never returns it: `kvx principal show` prints only the tenant and client id. A new principal applies to the next token request, with no restart, but switching `Kvx:Passthrough` itself takes a restart of kvx. `kvx principal` and `kvx doctor` ask the serving kvx which mode it runs in, so they need no `--Kvx:Passthrough` of their own. `ServicePrincipal` must be the only entry in `Kvx:Passthrough`, so an app never falls back to acting as you when the principal fails. A principal that is missing or cannot sign in gives the app an error naming it and the Entra error code.
+`kvx principal set` reads the secret from stdin (piped, or typed without echo), so it stays out of shell history. kvx keeps it in its encrypted store, under the same key as your vaults, and never returns it: `kvx principal show` prints only the tenant and client ids. A new principal applies to the next token request, with no restart, but switching `Kvx:Passthrough` itself takes a restart of kvx. `kvx principal` and `kvx doctor` ask the serving kvx which mode it runs in, so they need no `--Kvx:Passthrough` of their own. `ServicePrincipal` must be the only entry in `Kvx:Passthrough`, so an app never falls back to acting as you when the principal fails. A principal that is missing or cannot sign in gives the app an error naming it and the Entra error code.
+
+### Each app as its own principal
+
+In production, an app that runs as its own service principal or a user-assigned managed identity names it with `AZURE_CLIENT_ID`. Under `kvx run`, DefaultAzureCredential sends that id to kvx, and kvx signs in as the stored principal with that client id. This works whatever `Kvx:Passthrough` is set to, so the app keeps production's code and configuration, and its secret moves from your environment into kvx's store.
+
+```sh
+kvx principal set --tenant <tenant id> --client-id <app's client id>        # AZURE_CLIENT_ID is the principal itself
+kvx principal set --tenant <tenant id> --client-id <dev principal's id> \
+    --for <production managed identity's client id>                         # a dev principal stands in for it
+kvx principal show                                                          # which AZURE_CLIENT_ID gets which principal
+kvx principal clear --client-id <client id>
+```
+
+`--for` is for an identity kvx cannot sign in as, such as a managed identity, which exists only on Azure. Give the stand-in the same roles. Running `set` again for the same client id without `--for` or `--default` keeps both, so rotating a secret needs only the ids and the new secret.
+
+An app that sends an `AZURE_CLIENT_ID` kvx has no principal for gets an error naming the id, and is never served by your login instead. If your shell sets `AZURE_CLIENT_ID` for other reasons, store a principal for it, or unset it for apps that should use kvx's passthrough. Apps that name no identity are unaffected: they get your login, or with `ServicePrincipal` the principal marked `--default`. kvx selects only by client id: an app that names its managed identity by resource id or object id gets an error.
 
 In Entra this needs:
 
@@ -95,7 +111,7 @@ In Entra this needs:
 - **A check of tenant policy.** Some tenants restrict service-principal sign-in by location or forbid client secrets. The error then shows up in `kvx doctor`.
 
 > [!WARNING]
-> This puts a long-lived credential on your machine. It is encrypted at rest, but anything running as you that can read kvx's session token can get tokens as the principal while kvx runs. Give the principal only the roles the app needs, keep the secret's expiry short, and replace it with `kvx principal set` when it is rotated. `kvx principal clear` removes it.
+> This puts a long-lived credential on your machine. It is encrypted at rest, but anything running as you that can read kvx's session token can get tokens as the principal while kvx runs. Give the principal only the roles the app needs, keep the secret's expiry short, and replace it with `kvx principal set` when it is rotated. `kvx principal clear --client-id <client id>` removes it. Each stored principal is one more such credential.
 
 ## Use kvx from an Aspire AppHost
 

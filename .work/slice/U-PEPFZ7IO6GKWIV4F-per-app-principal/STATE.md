@@ -36,11 +36,10 @@ Out: object_id and mi_res_id selection (refused with a message); certificates (B
 Promoted from backlog: B-AYIFGKIAQ7CX64W3 Per-app passthrough principal chosen by the managed-identity client_id
 
 ## Now
-Code and tests done (95/95). README per-app section next, then BR's live check.
+Code, tests (95/95) and README done. Waiting on BR's live check.
 
 ## Next
-- README.
-- BR's live check (criterion 8).
+- BR's live check (criterion 8), then finalize.
 
 ## Evidence
 - 1, 3: PrincipalTests An_app_naming_a_client_id_gets_that_principal_in_any_mode (own id and alias; no client_id still gets the login; kvx resource still kvx's token), With_principal_passthrough_a_named_principal_wins_over_the_default; IdentityTests unchanged and passing.
@@ -48,6 +47,7 @@ Code and tests done (95/95). README per-app section next, then BR's live check.
 - 4: TlsEndToEndTests.Unmodified_app_round_trips_over_kvx_tls: the sample app under `kvx run` with AZURE_CLIENT_ID=0000… gets FakePrincipal's storage token through a `--for` alias.
 - 5: PrincipalCliTests Show_lists_each_principal_with_the_ids_apps_get_it_by (doctor: two ok lines), Set_reads_the_secret…, Doctor_fails_when_no_principal_is_the_default; Clear_removes_one_principal_by_client_id; An_id_another_principal_answers_to_is_409; Rotating_a_secret_keeps_aliases_and_the_default.
 - 6: A_store_with_the_single_principal_of_before_loads_it_as_the_default.
+- 7: README "Each app as its own principal".
 
 ## Harvest
 - [ ] decision: an app picks a principal by client_id, matching its own client id or a `--for` alias; an unknown id is refused in every mode, never falling back
