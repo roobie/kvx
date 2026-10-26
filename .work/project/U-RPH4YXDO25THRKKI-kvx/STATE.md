@@ -44,6 +44,7 @@ kvx is an installable dotnet tool on Linux that serves TLS itself with the ASP.N
 - Kestrel TLS (U-OAREUQEMOSGNLS4M), 2026-10-23: Caddy is gone. The installed tool serves `https://<vault>.dev.localhost:5381` with the real dev cert, and `kvx run` round-trips the unmodified app with no trust variables from the caller; with no certificate kvx refuses to start and says how to get one. Criterion 5 now needs only the dotnet tool on Linux. 36/36 tests.
 - kvx doctor (U-NZQKGC3WEV7UKMVJ), 2026-10-23: `kvx doctor` checks name resolution, the certificate kvx would serve, the key protector, and the serving kvx with a live handshake, and gives a fix for each failure. Each failure is induced in a test, and kvx's startup and not-serving errors point to it. The installed tool reports all five checks ok on BR's machine. 46/46 tests.
 - Aspire hosting (U-PUQYAEAE4IXK6QX5), 2026-10-23: `AddAzureKeyVault(…).RunAsKvx()` lets an unmodified app using Aspire's Key Vault client set and get secrets on kvx in run mode, with no subscription. The AppHost reuses a serving kvx (imported secrets visible) or starts its own and stops it after. A .NET worker and curl both get trusted TLS, and publish mode is unchanged. A second server on one store refuses. Shown by tests through Aspire.Hosting.Testing, and by the sample AppHost on BR's machine with the installed tool (criterion 6). 53/53 tests.
+- Principal passthrough (U-J6NQPZX2773LW7VS), 2026-10-26: with `Kvx:Passthrough=ServicePrincipal`, apps get other Azure tokens as a service principal kept in kvx's store instead of as the developer (D-WHMYBXHZAGDFWJNC). BR's live check on Windows 11: an unmodified DefaultAzureCredential app got the principal's ARM token and still ran the full secrets API through kvx. 82/82 tests.
 
 ## Harvest
 - [ ] decision: pure .NET over Go (audience, DPAPI, Aspire; distribution recoverable by packaging)
@@ -65,3 +66,4 @@ kvx is an installable dotnet tool on Linux that serves TLS itself with the ASP.N
 - 2026-10-23 kestrel-tls milestone delivered and closed; Caddy replaced by the dev cert
 - 2026-10-23 kvx-doctor milestone delivered and closed
 - 2026-10-23 aspire-hosting milestone delivered and closed
+- 2026-10-26 principal-passthrough slice delivered and closed
