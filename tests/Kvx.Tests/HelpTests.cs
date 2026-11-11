@@ -51,7 +51,8 @@ public sealed class HelpTests
     {
         var help = await LiveKvx.Cli(["help", "passthrough"]);
         Assert.True(help.ExitCode == 0, help.ToString());
-        var doc = File.ReadAllText(Path.Combine(Repo, "docs", "passthrough.md"));
+        // Both sides to LF: a Windows checkout (core.autocrlf) gives the doc CRLF, independent of how kvx prints it.
+        var doc = File.ReadAllText(Path.Combine(Repo, "docs", "passthrough.md")).ReplaceLineEndings("\n");
         Assert.StartsWith(doc.TrimEnd(), help.Stdout.ReplaceLineEndings("\n"));
         Assert.Matches(@"Online: https://github\.com/roobie/kvx/blob/[0-9a-f]{40}/docs/passthrough\.md", help.Stdout);
     }

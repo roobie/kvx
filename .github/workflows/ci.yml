@@ -15,9 +15,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
 
@@ -61,7 +61,7 @@ jobs:
         # A hanging test is named and dumped after 5 min instead of silently using up the job's timeout.
         run: dotnet test tests/Kvx.Tests -c Release --no-build --blame-hang-timeout 5m --logger "trx;LogFileName=results.trx" --logger "console;verbosity=normal"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: test-results-${{ matrix.os }}
