@@ -34,6 +34,8 @@ Commit and push; watch CI on all three OSes
 <!-- Proof against success_criteria: test runs, commits, measurements. -->
 - Release build + HelpTests 8/8 pass locally on Linux (CRLF path not reproducible here; Windows CI is the check)
 - action.yml at checkout v7.0.1, setup-dotnet v6.1.0, upload-artifact v7.0.2 all declare using: node24; release notes v5..v7 list no break affecting ci.yml's inputs
+- Run 43052380049 @97df6a1: HelpTests 8/8 pass on Windows; Node 20 warnings gone; ubuntu+macos green
+- CliTests+HelpTests 28/28 pass locally after the WaitForExitAsync fix
 
 ## Harvest
 <!-- Candidates found along the way. Finalize promotes or drops every unchecked item:
@@ -46,3 +48,4 @@ Commit and push; watch CI on all three OSes
 ## Log
 - 2026-11-11 initialized
 - 2026-11-11 phase initialize → execute
+- 2026-11-11 Windows then failed CliTests.Reuse_uses_the_serving_kvx_and_serves_once_it_stops: store.lock held at TempDir delete (first in 15 Windows runs) - killed process not awaited; added WaitForExitAsync

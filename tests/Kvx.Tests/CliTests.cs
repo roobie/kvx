@@ -168,6 +168,8 @@ public sealed class CliTests : IAsyncLifetime
         finally
         {
             second.Kill(entireProcessTree: true);
+            // Kill returns before exit; on Windows a dying kvx still holds store.lock when the data dir is deleted.
+            await second.WaitForExitAsync();
         }
     }
 
