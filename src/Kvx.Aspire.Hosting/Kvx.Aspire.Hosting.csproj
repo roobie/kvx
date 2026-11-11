@@ -10,6 +10,8 @@
     <Version>0.1.0</Version>
     <Description>Runs an Aspire AppHost's Azure Key Vault on kvx, a local Key Vault encrypted at rest, in run mode.</Description>
     <PackageTags>aspire;integration;hosting;keyvault;secrets</PackageTags>
+    <RepositoryUrl>https://github.com/roobie/kvx</RepositoryUrl>
+    <PackageLicenseExpression>MPL-2.0</PackageLicenseExpression>
   </PropertyGroup>
 
   <ItemGroup>

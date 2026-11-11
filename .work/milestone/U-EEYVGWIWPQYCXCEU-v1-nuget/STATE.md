@@ -43,6 +43,9 @@ Do it when release tagging starts; derive the tag from the package version.
 ## Now
 TODO: what is in flight right now. Rewrite this freely; it is a cursor, not a history.
 
+## Evidence
+- 1 (partial): LICENSE holds MPL-2.0; both csproj carry PackageLicenseExpression MPL-2.0 (nuspec checked after pack).
+
 ## Next
 - Verify whether nuget.org Trusted Publishing (GitHub OIDC) works for BR's account; otherwise an API key secret scoped to the two ids.
 - Consider reserving the ids early (a prerelease push) given `kvx` is short.
