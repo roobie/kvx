@@ -58,6 +58,6 @@ kvx env | source             # fish
 kvx env --shell pwsh | Invoke-Expression
 ```
 
-The token is per login session, so these values stay valid across kvx restarts until you log out.
+The token is reused across kvx restarts, so these values stay valid until you log out (Linux) or the machine restarts (Windows, macOS).
 
 An app run this way gets *all* its Azure tokens through kvx, not only Key Vault's. By default it reaches every other Azure service as you: `kvx help passthrough` says what that means and how to change it.
