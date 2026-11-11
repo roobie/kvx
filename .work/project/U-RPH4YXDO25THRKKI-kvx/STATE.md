@@ -30,10 +30,11 @@ Out (for now): multi-user or networked deployment; managed HSM.
 - Same-user scope means the service runs per user, on loopback.
 
 ## Now
-kvx is an installable dotnet tool on Linux that serves TLS itself with the ASP.NET Core dev cert, so nothing else needs installing. `kvx run` starts unmodified DefaultAzureCredential apps against it, and `kvx import` moves user-secrets in. `kvx doctor` says what is wrong with the machine's setup and how to fix it. An Aspire AppHost gets kvx with `RunAsKvx()`. Initializing the Windows/macOS milestone (U-VFQBGPLYZ3PEJFQG).
+kvx is an installable dotnet tool on Linux that serves TLS itself with the ASP.NET Core dev cert, so nothing else needs installing. `kvx run` starts unmodified DefaultAzureCredential apps against it, and `kvx import` moves user-secrets in. `kvx doctor` says what is wrong with the machine's setup and how to fix it. An Aspire AppHost gets kvx with `RunAsKvx()`. Windows and macOS pass the full suite in GitHub Actions. Executing milestone v1-nuget (U-EEYVGWIWPQYCXCEU): 1.0 on nuget.org under MPL-2.0.
 
 ## Next
-- Windows and macOS (criterion 3), proven in GitHub Actions on a mirror.
+- Finish slice per-app-principal (U-PEPFZ7IO6GKWIV4F): BR's live check, then harvest. It gates the v1.0.0 tag.
+- v1-nuget slices: license and metadata, store format version, stable-surface decision, release job, published-install check, docs and tag links.
 
 ## Evidence
 - Walking skeleton (U-MTGVCUWN5POPRG5D), 2026-10-23: an unmodified app process sets and gets secrets via Caddy at https://test.kvx.localhost; the data dir holds no plaintext name or value (partial evidence for criteria 1 and 2).
@@ -67,3 +68,5 @@ kvx is an installable dotnet tool on Linux that serves TLS itself with the ASP.N
 - 2026-10-23 kvx-doctor milestone delivered and closed
 - 2026-10-23 aspire-hosting milestone delivered and closed
 - 2026-10-26 principal-passthrough slice delivered and closed
+- 2026-11-11 windows-macos milestone delivered and closed
+- 2026-11-11 v1-nuget milestone started (U-EEYVGWIWPQYCXCEU)
