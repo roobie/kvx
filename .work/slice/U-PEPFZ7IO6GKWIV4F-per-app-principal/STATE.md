@@ -10,7 +10,7 @@ success_criteria:
   - an unknown client_id is answered 400 naming it and the `kvx principal set` that would serve it, in every Kvx:Passthrough mode, never falling back (test)
   - requests without a client_id behave as before in every Kvx:Passthrough mode (tests)
   - an unmodified DefaultAzureCredential app under `kvx run`, with AZURE_CLIENT_ID set to a stored principal's id and AZURE_CLIENT_SECRET in the caller's environment, reaches other resources as that principal and kvx's vaults with kvx's token (test)
-  - `kvx principal set … [--for <id>]` adds or replaces one principal, `show` lists them all without secrets, `clear` removes one; `kvx doctor` checks each stored principal signs in (tests)
+  - '`kvx principal set … [--for <id>]` adds or replaces one principal, `show` lists them all without secrets, `clear` removes one; `kvx doctor` checks each stored principal signs in (tests)'
   - a store written by the single-principal release still loads with its principal intact (test)
   - the README covers per-app principals and how they line up with production's AZURE_CLIENT_ID
   - an app with its own service principal runs against kvx on BR's machine with production's code and AZURE_CLIENT_ID, or BR waives the live check
